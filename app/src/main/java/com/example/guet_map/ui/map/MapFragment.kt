@@ -29,7 +29,6 @@ import com.amap.api.maps.MapsInitializer
 import com.amap.api.maps.model.BitmapDescriptorFactory
 import com.amap.api.maps.model.LatLng
 import com.amap.api.maps.model.MarkerOptions
-import com.amap.api.maps.model.MyLocationStyle
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentMapBinding
 import com.example.guet_map.databinding.LayoutNavigationPanelBinding
@@ -62,7 +61,8 @@ class MapFragment : Fragment() {
     private var navigationPanelBinding: LayoutNavigationPanelBinding? = null
     private var navigationTarget: Location? = null
 
-    private lateinit var locationManager: LocationManager
+    // 定位相关
+    private var aMapLocationClient: AMapLocationClient? = null
     private var myLocationMarker: com.amap.api.maps.model.Marker? = null
     private var latestLocation: android.location.Location? = null
 
@@ -90,7 +90,7 @@ class MapFragment : Fragment() {
         val fineGranted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (fineGranted || coarseGranted) {
-            startSystemLocation()
+            initAndStartAmapLocation()
         }
     }
 
@@ -107,8 +107,6 @@ class MapFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        locationManager = requireContext().getSystemService(LocationManager::class.java)
 
         setupBottomSheet()
         setupNavigationPanel()
@@ -137,7 +135,7 @@ class MapFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        stopSystemLocation()
+        aMapLocationClient?.destroy()
         binding.mapView.onDestroy()
         routeNavigator?.destroy()
         routeNavigator = null
@@ -269,6 +267,7 @@ class MapFragment : Fragment() {
     }
 
     private fun configureMap(map: AMap) {
+        // 禁用高德内置定位引擎，避免与系统定位冲突和产生错误提示
         map.isMyLocationEnabled = false
 
         map.uiSettings.apply {
@@ -283,17 +282,8 @@ class MapFragment : Fragment() {
             setAllGesturesEnabled(true)
         }
 
-        val myLocationStyle = MyLocationStyle()
-        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE_NO_CENTER)
-        myLocationStyle.interval(2000)
-        myLocationStyle.radiusFillColor(
-            ContextCompat.getColor(requireContext(), R.color.location_fill)
-        )
-        myLocationStyle.strokeColor(
-            ContextCompat.getColor(requireContext(), R.color.location_stroke)
-        )
-        myLocationStyle.strokeWidth(2f)
-        map.myLocationStyle = myLocationStyle
+        // 不再使用 MyLocationStyle，避免高德内部定位引擎自动启动
+        // 定位标记由系统 LocationManager 单独管理
 
         map.mapType = AMap.MAP_TYPE_NORMAL
 
@@ -324,7 +314,7 @@ class MapFragment : Fragment() {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasFine || hasCoarse) {
-            startSystemLocation()
+            initAndStartAmapLocation()
             return
         }
 
@@ -356,29 +346,38 @@ class MapFragment : Fragment() {
         }
     }
 
-    // ── 系统定位 (LocationManager，不依赖高德定位引擎) ──────────
+    // ── 高德定位 ──────────────────────────────────────────────────
 
-    private val locationListener = android.location.LocationListener { location ->
-        onLocationReceived(location)
-    }
+    /**
+     * 初始化并启动高德定位
+     */
+    private fun initAndStartAmapLocation() {
+        aMapLocationClient = AMapLocationClient(requireContext())
 
-    private fun startSystemLocation() {
-        try {
-            val providers = locationManager.getProviders(true)
-            for (provider in providers) {
-                locationManager.requestLocationUpdates(
-                    provider, 2000L, 5f, locationListener
-                )
-            }
-        } catch (e: SecurityException) {
-            // 权限不足
+        aMapLocationClient?.onLocationResult = { amapLocation ->
+            onAmapLocationReceived(amapLocation)
         }
+
+        // 错误不提示，静默重试
+        aMapLocationClient?.onLocationError = { _, _ -> }
+
+        aMapLocationClient?.start()
     }
 
-    private fun onLocationReceived(location: android.location.Location) {
+    /**
+     * 处理高德定位结果
+     */
+    private fun onAmapLocationReceived(amapLocation: com.amap.api.location.AMapLocation) {
+        if (!AMapLocationClient.isLocationSuccess(amapLocation)) {
+            return
+        }
+
+        // 转换为标准 Location
+        val location = AMapLocationClient.toStandardLocation(amapLocation)
         latestLocation = location
+
         val map = aMap ?: return
-        val latLng = LatLng(location.latitude, location.longitude)
+        val latLng = LatLng(amapLocation.latitude, amapLocation.longitude)
 
         // 更新或创建定位标记
         if (myLocationMarker == null) {
@@ -392,12 +391,12 @@ class MapFragment : Fragment() {
         } else {
             myLocationMarker?.position = latLng
         }
-    }
 
-    private fun stopSystemLocation() {
-        try {
-            locationManager.removeUpdates(locationListener)
-        } catch (_: Exception) {}
+        // 首次定位成功，自动居中
+        if (amapLocation.accuracy < 50) {
+            val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(latLng, 17f)
+            map.animateCamera(update, 500, null)
+        }
     }
 
     // ── My Location button ───────────────────────────────────────────
