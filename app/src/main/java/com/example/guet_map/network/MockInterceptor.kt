@@ -56,28 +56,28 @@ class MockInterceptor : Interceptor {
 
 private val LOCATIONS_JSON = """
 [
-  {"locationId":"building_11a","name":"第十一教学楼A区","latitude":25.2865,"longitude":110.4145,"category":"教室","rating":4.3,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11a.jpg","hasGuide":true},
-  {"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.2857,"longitude":110.4141,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true},
-  {"locationId":"canteen_1","name":"第一学生食堂","latitude":25.2840,"longitude":110.4120,"category":"食堂","rating":4.0,"openingHours":"06:30-21:00","imageUrl":"https://example.com/img/canteen1.jpg","hasGuide":false},
-  {"locationId":"canteen_2","name":"第二学生食堂","latitude":25.2830,"longitude":110.4130,"category":"食堂","rating":4.2,"openingHours":"06:30-21:30","imageUrl":"https://example.com/img/canteen2.jpg","hasGuide":true},
-  {"locationId":"library","name":"校图书馆","latitude":25.2870,"longitude":110.4110,"category":"图书馆","rating":4.7,"openingHours":"08:00-22:00","imageUrl":"https://example.com/img/library.jpg","hasGuide":true},
-  {"locationId":"coffee_lab","name":"实验室咖啡","latitude":25.2860,"longitude":110.4150,"category":"咖啡","rating":4.4,"openingHours":"08:30-21:00","imageUrl":"https://example.com/img/coffee.jpg","hasGuide":false},
-  {"locationId":"sports_center","name":"体育中心","latitude":25.2820,"longitude":110.4160,"category":"运动场","rating":4.1,"openingHours":"06:00-22:00","imageUrl":"https://example.com/img/sports.jpg","hasGuide":false},
-  {"locationId":"gate_south","name":"南门","latitude":25.2810,"longitude":110.4130,"category":"校门","rating":4.0,"openingHours":"全天","imageUrl":"https://example.com/img/gate.jpg","hasGuide":true}
+  {"locationId":"building_11a","name":"第十一教学楼A区","latitude":25.306954,"longitude":110.416001,"category":"教室","rating":4.3,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11a.jpg","hasGuide":true},
+  {"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.317049,"longitude":110.417234,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true},
+  {"locationId":"canteen_1","name":"第一学生食堂","latitude":25.320275,"longitude":110.415425,"category":"食堂","rating":4.0,"openingHours":"06:30-21:00","imageUrl":"https://example.com/img/canteen1.jpg","hasGuide":false},
+  {"locationId":"canteen_2","name":"第二学生食堂","latitude":25.316468,"longitude":110.416821,"category":"食堂","rating":4.2,"openingHours":"06:30-21:30","imageUrl":"https://example.com/img/canteen2.jpg","hasGuide":true},
+  {"locationId":"library","name":"校图书馆","latitude":25.313315,"longitude":110.418835,"category":"图书馆","rating":4.7,"openingHours":"08:00-22:00","imageUrl":"https://example.com/img/library.jpg","hasGuide":true},
+  {"locationId":"coffee_lab","name":"瑞幸咖啡","latitude":25.311320,"longitude":110.416325,"category":"咖啡","rating":4.4,"openingHours":"08:30-21:00","imageUrl":"https://example.com/img/coffee.jpg","hasGuide":false},
+  {"locationId":"sports_center","name":"体育中心","latitude":25.319390,"longitude":110.416340,"category":"运动场","rating":4.1,"openingHours":"06:00-22:00","imageUrl":"https://example.com/img/sports.jpg","hasGuide":false},
+  {"locationId":"gate_south","name":"南门","latitude":25.304553,"longitude":110.419324,"category":"校门","rating":4.0,"openingHours":"全天","imageUrl":"https://example.com/img/gate.jpg","hasGuide":true}
 ]
 """.trimIndent()
 
 private val LOCATION_DETAIL_JSON = mapOf(
-    "building_11b" to """{"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.2857,"longitude":110.4141,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true}"""
+    "building_11b" to """{"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.317049,"longitude":110.417234,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true}"""
 )
 
 private val GUIDE_STEPS_JSON = mapOf(
     "building_11b" to """
 [
-  {"id":1,"locationId":"building_11b","stepNumber":1,"description":"从南门进入校园，沿主干道直行约200米","imageUrl":"https://example.com/guide/11b_01.jpg"},
-  {"id":2,"locationId":"building_11b","stepNumber":2,"description":"看到「创新大楼」指示牌后左转","imageUrl":"https://example.com/guide/11b_02.jpg"},
-  {"id":3,"locationId":"building_11b","stepNumber":3,"description":"走到创维半岛大厦西塔大门","imageUrl":"https://example.com/guide/11b_03.jpg"},
-  {"id":4,"locationId":"building_11b","stepNumber":4,"description":"乘坐电梯至3楼，出门后右侧即为B区入口","imageUrl":"https://example.com/guide/11b_04.jpg"}
+  {"id":1,"locationId":"building_11b","stepNumber":1,"description":"从南门进入校园，沿主干道直行约300米","imageUrl":"https://example.com/guide/11b_01.jpg"},
+  {"id":2,"locationId":"building_11b","stepNumber":2,"description":"看到「第5教学楼」指示牌后左转","imageUrl":"https://example.com/guide/11b_02.jpg"},
+  {"id":3,"locationId":"building_11b","stepNumber":3,"description":"沿着校园道路直行约200米","imageUrl":"https://example.com/guide/11b_03.jpg"},
+  {"id":4,"locationId":"building_11b","stepNumber":4,"description":"到达研究生院大楼，左侧即为第十一教学楼B区入口","imageUrl":"https://example.com/guide/11b_04.jpg"}
 ]
 """.trimIndent(),
     "default" to """

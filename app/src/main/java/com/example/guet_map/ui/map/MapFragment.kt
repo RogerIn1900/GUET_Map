@@ -65,10 +65,13 @@ class MapFragment : Fragment() {
     private var aMapLocationClient: AMapLocationClient? = null
     private var myLocationMarker: com.amap.api.maps.model.Marker? = null
     private var latestLocation: android.location.Location? = null
+    private var hasAutoCenteredOnLocation = false  // 标记是否已自动居中
 
     // 搜索相关
     private var cardSearchResults: androidx.cardview.widget.CardView? = null
     private var rvSearchResults: RecyclerView? = null
+    private var aMapSearchClient: AMapSearchClient? = null
+    private var poiMarkers: MutableList<com.amap.api.maps.model.Marker> = mutableListOf()
 
     // BottomSheet 内部视图缓存
     private var sheetTitle: TextView? = null
@@ -136,6 +139,8 @@ class MapFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         aMapLocationClient?.destroy()
+        aMapSearchClient?.destroy()
+        clearPoiMarkers()
         binding.mapView.onDestroy()
         routeNavigator?.destroy()
         routeNavigator = null
@@ -288,7 +293,7 @@ class MapFragment : Fragment() {
         map.mapType = AMap.MAP_TYPE_NORMAL
 
         val cameraUpdate = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
-            com.amap.api.maps.model.LatLng(25.2851, 110.4131), 16f
+            com.amap.api.maps.model.LatLng(25.3117, 110.4168), 16f
         )
         map.moveCamera(cameraUpdate)
     }
@@ -392,8 +397,9 @@ class MapFragment : Fragment() {
             myLocationMarker?.position = latLng
         }
 
-        // 首次定位成功，自动居中
-        if (amapLocation.accuracy < 50) {
+        // 首次定位成功且未手动移动地图时，自动居中一次
+        if (!hasAutoCenteredOnLocation && amapLocation.accuracy < 50) {
+            hasAutoCenteredOnLocation = true
             val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(latLng, 17f)
             map.animateCamera(update, 500, null)
         }
@@ -641,10 +647,35 @@ class MapFragment : Fragment() {
     // ── Search bar ──────────────────────────────────────────────────
 
     private fun setupSearchBar() {
+        // 初始化高德搜索客户端
+        aMapSearchClient = AMapSearchClient(requireContext()).apply {
+            onPoiSearchResult = { results ->
+                showPoiSearchResults(results)
+            }
+            onSearchError = { error ->
+                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show()
+            }
+        }
+
         binding.etSearch.addTextChangedListener(object : TextWatcher {
+            private var searchRunnable: Runnable? = null
+
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                viewModel.setSearchQuery(s?.toString().orEmpty())
+                // 取消之前的搜索
+                searchRunnable?.let { binding.etSearch.removeCallbacks(it) }
+                // 300ms 防抖
+                searchRunnable = Runnable {
+                    val query = s?.toString().orEmpty()
+                    if (query.length >= 2) {
+                        // 使用高德搜索
+                        aMapSearchClient?.searchKeyword(query)
+                    } else if (query.isEmpty()) {
+                        // 显示缓存地点
+                        viewModel.setSearchQuery("")
+                    }
+                }
+                binding.etSearch.postDelayed(searchRunnable!!, 300)
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -669,14 +700,89 @@ class MapFragment : Fragment() {
         rvSearchResults?.adapter = searchResultAdapter
     }
 
+    private fun showPoiSearchResults(results: List<PoiSearchResult>) {
+        // 清除之前的 POI 标记
+        clearPoiMarkers()
+
+        if (results.isEmpty()) {
+            Toast.makeText(requireContext(), "未找到相关地点", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 在地图上添加标记
+        results.forEachIndexed { index, poi ->
+            val marker = aMap?.addMarker(
+                MarkerOptions()
+                    .position(LatLng(poi.latitude, poi.longitude))
+                    .title(poi.name)
+                    .snippet(poi.address)
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+            )
+            marker?.let { poiMarkers.add(it) }
+        }
+
+        // 自动居中到第一个结果
+        val firstResult = results.first()
+        val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
+            LatLng(firstResult.latitude, firstResult.longitude), 16f
+        )
+        aMap?.animateCamera(update)
+
+        // 显示搜索结果列表
+        cardSearchResults?.visibility = View.VISIBLE
+        val locations = results.map { poi ->
+            Location(
+                locationId = poi.id,
+                name = poi.name,
+                latitude = poi.latitude,
+                longitude = poi.longitude,
+                category = "搜索结果",
+                rating = 0f,
+                openingHours = "",
+                imageUrl = "",
+                hasGuide = false
+            )
+        }
+        searchResultAdapter.submitList(locations)
+
+        // 设置 POI 点击事件
+        aMap?.setOnMarkerClickListener { marker ->
+            if (poiMarkers.contains(marker)) {
+                val index = poiMarkers.indexOf(marker)
+                if (index >= 0 && index < results.size) {
+                    val poi = results[index]
+                    Toast.makeText(requireContext(), "${poi.name}\n${poi.address}", Toast.LENGTH_LONG).show()
+                }
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    private fun clearPoiMarkers() {
+        poiMarkers.forEach { it.remove() }
+        poiMarkers.clear()
+    }
+
     private fun showSearchResults(results: List<Location>) {
         cardSearchResults?.visibility = View.VISIBLE
         searchResultAdapter.submitList(results)
+        // 自动居中到第一个搜索结果
+        if (results.isNotEmpty()) {
+            val firstResult = results.first()
+            val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
+                LatLng(firstResult.latitude, firstResult.longitude), 17f
+            )
+            aMap?.animateCamera(update)
+        }
     }
 
     private fun hideSearchResults() {
         cardSearchResults?.visibility = View.GONE
+        clearPoiMarkers()
         binding.etSearch.text?.clear()
+        viewModel.setSearchQuery("")
         val imm = requireContext().getSystemService(InputMethodManager::class.java)
         imm.hideSoftInputFromWindow(binding.etSearch.windowToken, 0)
     }
