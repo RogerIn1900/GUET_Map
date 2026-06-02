@@ -10,9 +10,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.widget.ContentLoadingProgressBar
 import androidx.fragment.app.Fragment
@@ -30,9 +32,11 @@ import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.MyLocationStyle
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentMapBinding
+import com.example.guet_map.databinding.LayoutNavigationPanelBinding
 import com.example.guet_map.model.GuideStep
 import com.example.guet_map.model.Location
 import com.example.guet_map.model.Resource
+import com.example.guet_map.ui.map.RouteNavigator.RouteResult
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
@@ -53,6 +57,11 @@ class MapFragment : Fragment() {
 
     private var aMap: AMap? = null
 
+    // 导航相关
+    private var routeNavigator: RouteNavigator? = null
+    private var navigationPanelBinding: LayoutNavigationPanelBinding? = null
+    private var navigationTarget: Location? = null
+
     private lateinit var locationManager: LocationManager
     private var myLocationMarker: com.amap.api.maps.model.Marker? = null
     private var latestLocation: android.location.Location? = null
@@ -68,6 +77,12 @@ class MapFragment : Fragment() {
     private var sheetProgress: ContentLoadingProgressBar? = null
     private var sheetRecycler: RecyclerView? = null
     private var sheetEmpty: TextView? = null
+
+    // 导航面板视图缓存
+    private var tvRouteDistance: TextView? = null
+    private var tvRouteDuration: TextView? = null
+    private var tvNextStep: TextView? = null
+    private var cardNavigationPanel: CardView? = null
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -96,6 +111,7 @@ class MapFragment : Fragment() {
         locationManager = requireContext().getSystemService(LocationManager::class.java)
 
         setupBottomSheet()
+        setupNavigationPanel()
         setupFilterTags()
         setupSearchBar()
         setupSearch()
@@ -123,6 +139,9 @@ class MapFragment : Fragment() {
         super.onDestroyView()
         stopSystemLocation()
         binding.mapView.onDestroy()
+        routeNavigator?.destroy()
+        routeNavigator = null
+        navigationPanelBinding = null
         sheetTitle = null
         sheetRating = null
         sheetHours = null
@@ -132,6 +151,10 @@ class MapFragment : Fragment() {
         myLocationMarker = null
         cardSearchResults = null
         rvSearchResults = null
+        tvRouteDistance = null
+        tvRouteDuration = null
+        tvNextStep = null
+        cardNavigationPanel = null
         _binding = null
     }
 
@@ -189,9 +212,60 @@ class MapFragment : Fragment() {
             viewModel.aMap = map
             configureMap(map)
             setupMarkerClickListener(map)
+            initNavigation(map)
             viewModel.loadLocations()
             requestLocationPermissionIfNeeded()
         }
+    }
+
+    /**
+     * 初始化导航功能
+     */
+    private fun initNavigation(map: AMap) {
+        routeNavigator = RouteNavigator(map)
+        routeNavigator?.onRouteCalculated = { result ->
+            activity?.runOnUiThread {
+                showNavigationPanel(result)
+            }
+        }
+        routeNavigator?.onError = { errorMsg ->
+            activity?.runOnUiThread {
+                Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * 显示导航面板
+     */
+    private fun showNavigationPanel(result: RouteResult) {
+        val panelBinding = navigationPanelBinding ?: return
+
+        // 获取路径信息
+        val distance = result.distance.toInt()
+        val duration = result.duration / 60
+
+        // 更新面板显示
+        panelBinding.tvRouteDistance.text = distance.toString()
+        panelBinding.tvRouteDuration.text = duration.toString()
+
+        // 显示导航提示
+        panelBinding.tvNextStep.text = "点击「关闭」结束导航"
+
+        // 显示面板
+        panelBinding.cardNavigationPanel.visibility = View.VISIBLE
+
+        // 收起 BottomSheet
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+    }
+
+    /**
+     * 隐藏导航面板
+     */
+    private fun hideNavigationPanel() {
+        navigationPanelBinding?.cardNavigationPanel?.visibility = View.GONE
+        routeNavigator?.clearRoute()
+        navigationTarget = null
     }
 
     private fun configureMap(map: AMap) {
@@ -485,9 +559,32 @@ class MapFragment : Fragment() {
         }
     }
 
+    /**
+     * 设置导航面板
+     */
+    private fun setupNavigationPanel() {
+        val navPanelView = layoutInflater.inflate(R.layout.layout_navigation_panel, null)
+        navigationPanelBinding = LayoutNavigationPanelBinding.bind(navPanelView)
+
+        // 缓存视图引用
+        tvRouteDistance = navigationPanelBinding?.tvRouteDistance
+        tvRouteDuration = navigationPanelBinding?.tvRouteDuration
+        tvNextStep = navigationPanelBinding?.tvNextStep
+        cardNavigationPanel = navigationPanelBinding?.cardNavigationPanel
+
+        // 关闭按钮
+        navigationPanelBinding?.btnCloseNavigation?.setOnClickListener {
+            hideNavigationPanel()
+        }
+
+        // 将导航面板添加到地图容器
+        val container = binding.root.findViewById<ViewGroup>(R.id.mapContainer)
+        container?.addView(navPanelView)
+    }
+
     private fun configureActionButtons(root: View) {
         root.findViewById<View>(R.id.btnNavigate)?.setOnClickListener {
-            Toast.makeText(requireContext(), "导航功能将在后续版本开放", Toast.LENGTH_SHORT).show()
+            startNavigation()
         }
         root.findViewById<View>(R.id.btnFavorite)?.setOnClickListener {
             Toast.makeText(requireContext(), "已加入收藏", Toast.LENGTH_SHORT).show()
@@ -495,6 +592,36 @@ class MapFragment : Fragment() {
         root.findViewById<View>(R.id.btnShare)?.setOnClickListener {
             Toast.makeText(requireContext(), "分享功能将在后续版本开放", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /**
+     * 开始导航
+     * 从当前位置导航到选中的地点
+     */
+    private fun startNavigation() {
+        val target = viewModel.selectedLocation.value
+        val currentLocation = latestLocation
+
+        if (target == null) {
+            Toast.makeText(requireContext(), "请先选择一个目的地", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (currentLocation == null) {
+            Toast.makeText(requireContext(), "正在获取您的位置信息...", Toast.LENGTH_SHORT).show()
+            requestLocationPermissionIfNeeded()
+            return
+        }
+
+        // 保存导航目标
+        navigationTarget = target
+
+        // 开始路径搜索
+        val startLatLng = LatLng(currentLocation.latitude, currentLocation.longitude)
+        val endLatLng = LatLng(target.latitude, target.longitude)
+
+        routeNavigator?.searchRoute(startLatLng, endLatLng)
+        Toast.makeText(requireContext(), "正在规划路线...", Toast.LENGTH_SHORT).show()
     }
 
     // ── Filter tags ─────────────────────────────────────────────────

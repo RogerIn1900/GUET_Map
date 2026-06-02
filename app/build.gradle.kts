@@ -87,6 +87,8 @@ dependencies {
     // AMap SDK (3D地图已包含定位功能)
     implementation(libs.amap.map3d)
 
+    // 搜索 SDK暂不使用，使用内置功能实现导航
+
     // Image loading
     implementation(libs.coil)
 

@@ -19,6 +19,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 高德地图 SDK 仓库
+        maven {
+            url = uri("https://jitpack.io")
+        }
     }
 }
 
