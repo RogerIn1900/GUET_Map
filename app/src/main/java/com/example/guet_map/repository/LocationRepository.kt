@@ -1,14 +1,17 @@
 package com.example.guet_map.repository
 
+import com.example.guet_map.BuildConfig
 import com.example.guet_map.local.dao.LocationDao
 import com.example.guet_map.local.entity.LocationEntity
 import com.example.guet_map.model.Location
 import com.example.guet_map.model.Resource
 import com.example.guet_map.network.ApiService
+import com.example.guet_map.util.GuetCampusPoiLoader
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.catch
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,35 +19,51 @@ import javax.inject.Singleton
 @Singleton
 class LocationRepository @Inject constructor(
     private val apiService: ApiService,
-    private val locationDao: LocationDao
+    private val locationDao: LocationDao,
+    private val campusPoiLoader: GuetCampusPoiLoader
 ) {
 
-    /**
-     * SSOT: 网络优先 → 缓存到 Room → 网络失败时回退缓存。
-     */
+    // 修复崩溃3：Flow异常透明性违反
+    // 使用单独的flow构建器，避免在catch块中emit
     fun getLocations(): Flow<Resource<List<Location>>> = flow {
         emit(Resource.Loading)
 
-        val hasCached = locationDao.count() > 0
-
         try {
-            val remote = apiService.getLocations()
+            val locations = loadRemoteLocations()
             locationDao.deleteAll()
-            locationDao.insertAll(remote.map { it.toEntity() })
-            emit(Resource.Success(remote))
-        } catch (e: IOException) {
-            if (hasCached) {
-                val cached = locationDao.getAllLocations().first()
-                emit(Resource.Success(cached.map { it.toDomain() }))
-            } else {
-                emit(Resource.Error("网络不可用: ${e.localizedMessage}"))
-            }
+            locationDao.insertAll(locations.map { it.toEntity() })
+            emit(Resource.Success(locations))
         } catch (e: Exception) {
-            if (hasCached) {
-                val cached = locationDao.getAllLocations().first()
-                emit(Resource.Success(cached.map { it.toDomain() }))
-            } else {
-                emit(Resource.Error("加载失败: ${e.localizedMessage}"))
+            // 不在catch块中直接emit，而是重新抛出，让外层的catch操作符处理
+            throw LocationLoadException(e)
+        }
+    }.catch { e ->
+        // 使用catch操作符处理所有异常
+        when (e) {
+            is LocationLoadException -> {
+                val hasCached = try {
+                    locationDao.count() > 0
+                } catch (dbException: Exception) {
+                    false
+                }
+
+                if (hasCached) {
+                    try {
+                        val cachedData = locationDao.getAllLocations().first().map { it.toDomain() }
+                        emit(Resource.Success(cachedData))
+                    } catch (dbException: Exception) {
+                        emit(Resource.Error("数据加载失败: ${dbException.localizedMessage}"))
+                    }
+                } else {
+                    val message = when (e.cause) {
+                        is IOException -> "网络不可用: ${e.cause!!.localizedMessage}"
+                        else -> "加载失败: ${e.cause?.localizedMessage ?: "未知错误"}"
+                    }
+                    emit(Resource.Error(message))
+                }
+            }
+            else -> {
+                emit(Resource.Error("未知错误: ${e.localizedMessage}"))
             }
         }
     }
@@ -53,30 +72,56 @@ class LocationRepository @Inject constructor(
         emit(Resource.Loading)
 
         try {
-            val remote = apiService.getLocationsByCategory(category)
+            val cachedAll = locationDao.getAllLocations().first()
+            if (cachedAll.isNotEmpty()) {
+                val filtered = cachedAll.map { it.toDomain() }.filter { it.category == category }
+                emit(Resource.Success(filtered))
+                return@flow
+            }
+
+            val remote = loadRemoteLocations()
             locationDao.insertAll(remote.map { it.toEntity() })
-            emit(Resource.Success(remote))
+            val filteredRemote = remote.filter { it.category == category }
+            emit(Resource.Success(filteredRemote))
         } catch (e: Exception) {
-            val cached = locationDao.getLocationsByCategory(category).first()
-            if (cached.isNotEmpty()) {
-                emit(Resource.Success(cached.map { it.toDomain() }))
-            } else {
-                emit(Resource.Error("加载失败: ${e.localizedMessage}"))
+            throw LocationLoadException(e)
+        }
+    }.catch { e ->
+        when (e) {
+            is LocationLoadException -> {
+                try {
+                    val cached = locationDao.getLocationsByCategory(category).first()
+                    if (cached.isNotEmpty()) {
+                        emit(Resource.Success(cached.map { it.toDomain() }))
+                    } else {
+                        emit(Resource.Error("加载失败: ${e.cause?.localizedMessage ?: "未知错误"}"))
+                    }
+                } catch (dbException: Exception) {
+                    emit(Resource.Error("数据加载失败: ${dbException.localizedMessage}"))
+                }
+            }
+            else -> {
+                emit(Resource.Error("未知错误: ${e.localizedMessage}"))
             }
         }
     }
 
-    /**
-     * 观察 Room 中的缓存数据（实时更新）。
-     */
-    fun observeCachedLocations(): Flow<List<Location>> {
-        return locationDao.getAllLocations()
-            .map { entities -> entities.map { it.toDomain() } }
-    }
+    fun observeCachedLocations(): Flow<List<Location>> =
+        locationDao.getAllLocations().map { entities -> entities.map { it.toDomain() } }
 
-    fun observeCachedLocationsByCategory(category: String): Flow<List<Location>> {
-        return locationDao.getLocationsByCategory(category)
-            .map { entities -> entities.map { it.toDomain() } }
+    fun observeCachedLocationsByCategory(category: String): Flow<List<Location>> =
+        locationDao.getLocationsByCategory(category).map { entities -> entities.map { it.toDomain() } }
+
+    suspend fun getCachedLocationById(locationId: String): Location? =
+        locationDao.getLocationById(locationId)?.toDomain()
+
+    private suspend fun loadRemoteLocations(): List<Location> {
+        val fromAmap = campusPoiLoader.loadGuetCampusLocations()
+        if (fromAmap.isNotEmpty()) return fromAmap
+        if (!BuildConfig.USE_MOCK_API) {
+            return apiService.getLocations()
+        }
+        return emptyList()
     }
 
     private fun Location.toEntity() = LocationEntity(
@@ -102,4 +147,14 @@ class LocationRepository @Inject constructor(
         imageUrl = imageUrl,
         hasGuide = hasGuide
     )
+}
+
+/**
+ * 自定义异常类，用于包装原始异常，避免在flow的try-catch块中直接emit
+ */
+private class LocationLoadException(
+    message: String? = null,
+    cause: Throwable? = null
+) : Exception(message, cause) {
+    constructor(cause: Throwable) : this(cause.localizedMessage, cause)
 }

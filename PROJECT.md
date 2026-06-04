@@ -15,6 +15,10 @@ https://api.guetmap.example.com
 
 ---
 
+## 产品需求
+
+完善版需求与功能大纲见 [REQUIREMENTS.md](REQUIREMENTS.md)。
+
 ## 目录结构
 
 ```
@@ -323,6 +327,15 @@ Fragment (UI)
 - `MapFragment.kt:274-316` — 定位逻辑
 - `res/drawable/ic_my_location.xml` — 定位图标
 - `res/layout/fragment_map.xml:84-97` — 归位 FAB
+
+---
+
+## 校内步行导航
+
+- 地点详情点击 **导航** → 选择 **校内步行路线（地图内）** 或 **高德地图步行导航**
+- 校内路线：调用高德 Web 服务 `v3/direction/walking`，在地图上绘制步行折线并显示距离/时间
+- 需在[高德开放平台](https://console.amap.com/)为同一 Key 开通 **Web 服务** 权限
+- Mock 数据已覆盖：教室、宿舍、图书馆、运动场、食堂、校门、商店等花江校区 POI
 
 ---
 

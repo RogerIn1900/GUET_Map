@@ -30,6 +30,7 @@ coroutines = "1.8.1"
 
 # AMap SDK
 amap3dmap = "10.0.600"
+amapSearch = "9.7.4"
 amapLocation = "6.4.7"
 amapSearch = "8.1.0"
 

@@ -25,6 +25,16 @@
             android:layout_marginBottom="12dp"
             android:background="@drawable/sheet_handle" />
 
+        <ImageView
+            android:id="@+id/ivSheetCover"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_marginBottom="12dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/location_cover"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
         <!-- 地点名称 + 评分 -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -154,6 +164,15 @@
             android:text="暂无图文指引"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="14sp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnContributeGuide"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/contribute_guide_cta"
             android:visibility="gone" />
 
     </LinearLayout>

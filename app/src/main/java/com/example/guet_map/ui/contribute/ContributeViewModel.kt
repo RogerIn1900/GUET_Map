@@ -6,10 +6,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.guet_map.data.UserPrefs
 import com.example.guet_map.model.Location
+import com.example.guet_map.model.MyGuideSubmission
 import com.example.guet_map.model.Resource
 import com.example.guet_map.model.UploadResponse
 import com.example.guet_map.network.ApiService
+import com.example.guet_map.repository.ContributeDraftRepository
+import com.example.guet_map.repository.DraftStepData
 import com.example.guet_map.repository.LocationRepository
+import com.example.guet_map.util.ImageCompressor
+import com.example.guet_map.util.LocalNotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,20 +33,17 @@ class ContributeViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiService: ApiService,
     private val locationRepository: LocationRepository,
-    private val userPrefs: UserPrefs
+    private val userPrefs: UserPrefs,
+    private val draftRepository: ContributeDraftRepository
 ) : ViewModel() {
 
     init {
         loadLocationsIfEmpty()
     }
 
-    // ── 地点列表 (供 AutoComplete 下拉) ──────────────────────
-
     val cachedLocations: StateFlow<List<Location>> = locationRepository
         .observeCachedLocations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ── 选中地点 ─────────────────────────────────────────────
 
     private val _selectedLocationId = MutableStateFlow("")
     val selectedLocationId: StateFlow<String> = _selectedLocationId.asStateFlow()
@@ -49,33 +51,25 @@ class ContributeViewModel @Inject constructor(
     private val _selectedLocationName = MutableStateFlow("")
     val selectedLocationName: StateFlow<String> = _selectedLocationName.asStateFlow()
 
-    // ── 步骤表单 ─────────────────────────────────────────────
-
     private val _stepItems = MutableStateFlow(listOf(StepFormItem(stepNumber = 1)))
     val stepItems: StateFlow<List<StepFormItem>> = _stepItems.asStateFlow()
-
-    // ── 上传状态 ─────────────────────────────────────────────
 
     private val _uploadState = MutableStateFlow<UploadUiState>(UploadUiState.Idle)
     val uploadState: StateFlow<UploadUiState> = _uploadState.asStateFlow()
 
-    // ── 用户积分 ─────────────────────────────────────────────
-
     private val _userPoints = MutableStateFlow(userPrefs.points)
     val userPoints: StateFlow<Int> = _userPoints.asStateFlow()
-
-    // ── 当前编辑照片的步骤 ID ────────────────────────────────
 
     private val _pendingPhotoStepId = MutableStateFlow<String?>(null)
     val pendingPhotoStepId: StateFlow<String?> = _pendingPhotoStepId.asStateFlow()
 
-    // ── 方法 ─────────────────────────────────────────────────
+    private val _mySubmissions = MutableStateFlow<Resource<List<MyGuideSubmission>>>(Resource.Loading)
+    val mySubmissions: StateFlow<Resource<List<MyGuideSubmission>>> = _mySubmissions.asStateFlow()
 
     private fun loadLocationsIfEmpty() {
         viewModelScope.launch {
-            val cached = cachedLocations.value
-            if (cached.isEmpty()) {
-                locationRepository.getLocations().collect { /* 缓存到 Room 即可 */ }
+            if (cachedLocations.value.isEmpty()) {
+                locationRepository.getLocations().collect { /* cache */ }
             }
         }
     }
@@ -114,8 +108,58 @@ class ContributeViewModel @Inject constructor(
         }
     }
 
-    fun setPendingPhotoStep(stepId: String) {
-        _pendingPhotoStepId.value = stepId
+    fun setPendingPhotoStep(stepId: String?) {
+        _pendingPhotoStepId.value = stepId?.takeIf { it.isNotBlank() }
+    }
+
+    fun saveDraft() {
+        viewModelScope.launch {
+            val steps = _stepItems.value.map { step ->
+                DraftStepData(
+                    stepNumber = step.stepNumber,
+                    description = step.description,
+                    imageUri = step.imageUri?.toString()
+                )
+            }
+            draftRepository.saveDraft(
+                com.example.guet_map.repository.ContributeDraft(
+                    locationId = _selectedLocationId.value,
+                    locationName = _selectedLocationName.value,
+                    steps = steps
+                )
+            )
+            _uploadState.value = UploadUiState.Success("草稿已保存")
+        }
+    }
+
+    fun loadDraft() {
+        viewModelScope.launch {
+            val draft = draftRepository.loadDraft() ?: run {
+                _uploadState.value = UploadUiState.Error("没有可恢复的草稿")
+                return@launch
+            }
+            _selectedLocationId.value = draft.locationId
+            _selectedLocationName.value = draft.locationName
+            _stepItems.value = draft.steps.map { data ->
+                StepFormItem(
+                    stepNumber = data.stepNumber,
+                    description = data.description,
+                    imageUri = data.imageUri?.let { Uri.parse(it) }
+                )
+            }.ifEmpty { listOf(StepFormItem(stepNumber = 1)) }
+            _uploadState.value = UploadUiState.Success("草稿已恢复")
+        }
+    }
+
+    fun loadMySubmissions() {
+        viewModelScope.launch {
+            _mySubmissions.value = Resource.Loading
+            try {
+                _mySubmissions.value = Resource.Success(apiService.getMyGuideSubmissions())
+            } catch (e: Exception) {
+                _mySubmissions.value = Resource.Error("加载失败: ${e.localizedMessage}")
+            }
+        }
     }
 
     fun submitSteps() {
@@ -157,12 +201,17 @@ class ContributeViewModel @Inject constructor(
                 }
 
                 userPrefs.addPoints(totalPoints)
+                userPrefs.contributionCount = userPrefs.contributionCount + filledSteps.size
                 _userPoints.value = userPrefs.points
-                _uploadState.value = UploadUiState.Success(
-                    "提交成功！获得 $totalPoints 积分，待审核通过后发放"
+                draftRepository.clearDraft()
+                val msg = "提交成功！获得 $totalPoints 积分，待审核通过后发放"
+                _uploadState.value = UploadUiState.Success(msg)
+                LocalNotificationHelper.show(
+                    context,
+                    "UGC 已提交",
+                    "您的指路步骤已提交审核，通过后将发放积分"
                 )
 
-                // 重置表单
                 _selectedLocationId.value = ""
                 _selectedLocationName.value = ""
                 _stepItems.value = listOf(StepFormItem(stepNumber = 1))
@@ -178,25 +227,17 @@ class ContributeViewModel @Inject constructor(
         _uploadState.value = UploadUiState.Idle
     }
 
-    // ── 辅助 ─────────────────────────────────────────────────
-
     private fun createImagePart(step: StepFormItem): MultipartBody.Part {
         val uri = step.imageUri
         if (uri != null) {
-            val resolver = context.contentResolver
-            val mimeType = resolver.getType(uri) ?: "image/jpeg"
-            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                ?: ByteArray(0)
-            val body = bytes.toRequestBody(mimeType.toMediaType())
+            val bytes = ImageCompressor.compressToJpegBytes(context, uri)
+            val body = bytes.toRequestBody("image/jpeg".toMediaType())
             return MultipartBody.Part.createFormData(
                 "image", "step_${step.stepNumber}.jpg", body
             )
         } else {
-            val emptyBody = ByteArray(0)
-                .toRequestBody("image/jpeg".toMediaType())
-            return MultipartBody.Part.createFormData(
-                "image", "empty.jpg", emptyBody
-            )
+            val emptyBody = ByteArray(0).toRequestBody("image/jpeg".toMediaType())
+            return MultipartBody.Part.createFormData("image", "empty.jpg", emptyBody)
         }
     }
 }

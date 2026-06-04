@@ -1,10 +1,16 @@
 package com.example.guet_map.di
 
+import com.example.guet_map.BuildConfig
 import com.example.guet_map.local.AppDatabase
+import com.example.guet_map.local.dao.ContributeDraftDao
+import com.example.guet_map.local.dao.FavoriteDao
 import com.example.guet_map.local.dao.GuideStepDao
 import com.example.guet_map.local.dao.LocationDao
+import com.example.guet_map.local.dao.NotificationDao
 import com.example.guet_map.network.ApiService
+import com.example.guet_map.network.AuthInterceptor
 import com.example.guet_map.network.MockInterceptor
+import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,26 +26,33 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    private const val BASE_URL = "https://api.guetmap.example.com/"
+    @Provides
+    @Singleton
+    fun provideGson(): Gson = Gson()
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        return OkHttpClient.Builder()
-            .addInterceptor(MockInterceptor())   // 开发阶段 Mock 数据
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BODY
             })
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .build()
+
+        if (BuildConfig.USE_MOCK_API) {
+            builder.addInterceptor(MockInterceptor())
+        }
+
+        return builder.build()
     }
 
     @Provides
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -58,12 +71,18 @@ object AppModule {
     }
 
     @Provides
-    fun provideGuideStepDao(database: AppDatabase): GuideStepDao {
-        return database.guideStepDao()
-    }
+    fun provideGuideStepDao(database: AppDatabase): GuideStepDao = database.guideStepDao()
 
     @Provides
-    fun provideLocationDao(database: AppDatabase): LocationDao {
-        return database.locationDao()
-    }
+    fun provideLocationDao(database: AppDatabase): LocationDao = database.locationDao()
+
+    @Provides
+    fun provideFavoriteDao(database: AppDatabase): FavoriteDao = database.favoriteDao()
+
+    @Provides
+    fun provideNotificationDao(database: AppDatabase): NotificationDao = database.notificationDao()
+
+    @Provides
+    fun provideContributeDraftDao(database: AppDatabase): ContributeDraftDao =
+        database.contributeDraftDao()
 }
