@@ -25,8 +25,24 @@ class UserPrefs @Inject constructor(
         get() = prefs.getInt(KEY_POINTS, 0)
         set(value) = prefs.edit().putInt(KEY_POINTS, value).apply()
 
+    var authToken: String
+        get() = prefs.getString(KEY_AUTH_TOKEN, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AUTH_TOKEN, value).apply()
+
+    var contributionCount: Int
+        get() = prefs.getInt(KEY_CONTRIBUTION_COUNT, 0)
+        set(value) = prefs.edit().putInt(KEY_CONTRIBUTION_COUNT, value).apply()
+
     fun addPoints(earned: Int) {
         points += earned
+    }
+
+    fun login(response: com.example.guet_map.model.LoginResponse) {
+        isLoggedIn = true
+        authToken = response.token
+        nickname = response.nickname
+        points = response.points
+        contributionCount = response.contributionCount
     }
 
     fun clearAll() {
@@ -38,5 +54,7 @@ class UserPrefs @Inject constructor(
         private const val KEY_LOGGED_IN = "logged_in"
         private const val KEY_NICKNAME = "nickname"
         private const val KEY_POINTS = "points"
+        private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_CONTRIBUTION_COUNT = "contribution_count"
     }
 }

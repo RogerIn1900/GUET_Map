@@ -1,10 +1,12 @@
 package com.example.guet_map.repository
 
+import com.example.guet_map.BuildConfig
 import com.example.guet_map.local.dao.LocationDao
 import com.example.guet_map.local.entity.LocationEntity
 import com.example.guet_map.model.Location
 import com.example.guet_map.model.Resource
 import com.example.guet_map.network.ApiService
+import com.example.guet_map.util.GuetCampusPoiLoader
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -16,33 +18,27 @@ import javax.inject.Singleton
 @Singleton
 class LocationRepository @Inject constructor(
     private val apiService: ApiService,
-    private val locationDao: LocationDao
+    private val locationDao: LocationDao,
+    private val campusPoiLoader: GuetCampusPoiLoader
 ) {
 
-    /**
-     * SSOT: 网络优先 → 缓存到 Room → 网络失败时回退缓存。
-     */
     fun getLocations(): Flow<Resource<List<Location>>> = flow {
         emit(Resource.Loading)
-
         val hasCached = locationDao.count() > 0
-
         try {
-            val remote = apiService.getLocations()
+            val locations = loadRemoteLocations()
             locationDao.deleteAll()
-            locationDao.insertAll(remote.map { it.toEntity() })
-            emit(Resource.Success(remote))
+            locationDao.insertAll(locations.map { it.toEntity() })
+            emit(Resource.Success(locations))
         } catch (e: IOException) {
             if (hasCached) {
-                val cached = locationDao.getAllLocations().first()
-                emit(Resource.Success(cached.map { it.toDomain() }))
+                emit(Resource.Success(locationDao.getAllLocations().first().map { it.toDomain() }))
             } else {
                 emit(Resource.Error("网络不可用: ${e.localizedMessage}"))
             }
         } catch (e: Exception) {
             if (hasCached) {
-                val cached = locationDao.getAllLocations().first()
-                emit(Resource.Success(cached.map { it.toDomain() }))
+                emit(Resource.Success(locationDao.getAllLocations().first().map { it.toDomain() }))
             } else {
                 emit(Resource.Error("加载失败: ${e.localizedMessage}"))
             }
@@ -51,11 +47,15 @@ class LocationRepository @Inject constructor(
 
     fun getLocationsByCategory(category: String): Flow<Resource<List<Location>>> = flow {
         emit(Resource.Loading)
-
         try {
-            val remote = apiService.getLocationsByCategory(category)
+            val cachedAll = locationDao.getAllLocations().first()
+            if (cachedAll.isNotEmpty()) {
+                emit(Resource.Success(cachedAll.map { it.toDomain() }.filter { it.category == category }))
+                return@flow
+            }
+            val remote = loadRemoteLocations()
             locationDao.insertAll(remote.map { it.toEntity() })
-            emit(Resource.Success(remote))
+            emit(Resource.Success(remote.filter { it.category == category }))
         } catch (e: Exception) {
             val cached = locationDao.getLocationsByCategory(category).first()
             if (cached.isNotEmpty()) {
@@ -66,17 +66,22 @@ class LocationRepository @Inject constructor(
         }
     }
 
-    /**
-     * 观察 Room 中的缓存数据（实时更新）。
-     */
-    fun observeCachedLocations(): Flow<List<Location>> {
-        return locationDao.getAllLocations()
-            .map { entities -> entities.map { it.toDomain() } }
-    }
+    fun observeCachedLocations(): Flow<List<Location>> =
+        locationDao.getAllLocations().map { entities -> entities.map { it.toDomain() } }
 
-    fun observeCachedLocationsByCategory(category: String): Flow<List<Location>> {
-        return locationDao.getLocationsByCategory(category)
-            .map { entities -> entities.map { it.toDomain() } }
+    fun observeCachedLocationsByCategory(category: String): Flow<List<Location>> =
+        locationDao.getLocationsByCategory(category).map { entities -> entities.map { it.toDomain() } }
+
+    suspend fun getCachedLocationById(locationId: String): Location? =
+        locationDao.getLocationById(locationId)?.toDomain()
+
+    private suspend fun loadRemoteLocations(): List<Location> {
+        val fromAmap = campusPoiLoader.loadGuetCampusLocations()
+        if (fromAmap.isNotEmpty()) return fromAmap
+        if (!BuildConfig.USE_MOCK_API) {
+            return apiService.getLocations()
+        }
+        return emptyList()
     }
 
     private fun Location.toEntity() = LocationEntity(

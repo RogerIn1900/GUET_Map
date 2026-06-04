@@ -1,22 +1,35 @@
 package com.example.guet_map
 
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.example.guet_map.databinding.ActivityMainBinding
+import com.example.guet_map.ui.MainNavViewModel
 import dagger.hilt.android.AndroidEntryPoint
-
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val mainNavViewModel: MainNavViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "S3", "MainActivity.onCreate", "start",
+            emptyMap(), runId = "crash-fix"
+        )
+        // #endregion
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -27,6 +40,18 @@ class MainActivity : AppCompatActivity() {
         val navController = navHostFragment.navController
 
         binding.bottomNavigation.setupWithNavController(navController)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavViewModel.selectedTab.collectLatest { tabId ->
+                    tabId ?: return@collectLatest
+                    val consumed = mainNavViewModel.consumeTabRequest()
+                    if (consumed != null && navController.currentDestination?.id != consumed) {
+                        binding.bottomNavigation.selectedItemId = consumed
+                    }
+                }
+            }
+        }
     }
 
     private fun applyWindowInsets() {

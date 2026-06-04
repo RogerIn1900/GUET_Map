@@ -1,9 +1,13 @@
 package com.example.guet_map.ui.map
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.widget.ImageView
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -16,7 +20,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.widget.ContentLoadingProgressBar
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import com.google.android.material.button.MaterialButton
+import coil.load
+import com.example.guet_map.data.UserPrefs
+import com.example.guet_map.repository.AuthRepository
+import com.example.guet_map.ui.MainNavViewModel
+import com.example.guet_map.util.CampusGeo
+import com.example.guet_map.util.CampusLocationResolver
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -24,10 +38,14 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.amap.api.maps.AMap
 import com.amap.api.maps.MapsInitializer
+import com.amap.api.services.core.ServiceSettings
 import com.amap.api.maps.model.BitmapDescriptorFactory
 import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.LatLngBounds
 import com.amap.api.maps.model.MarkerOptions
 import com.amap.api.maps.model.MyLocationStyle
+import com.amap.api.maps.model.Polyline
+import com.amap.api.maps.model.PolylineOptions
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentMapBinding
 import com.example.guet_map.model.GuideStep
@@ -35,27 +53,35 @@ import com.example.guet_map.model.Location
 import com.example.guet_map.model.Resource
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MapFragment : Fragment() {
 
+    @Inject lateinit var authRepository: AuthRepository
+    @Inject lateinit var userPrefs: UserPrefs
+
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
 
     private val viewModel: MapViewModel by viewModels()
+    private val mainNavViewModel: MainNavViewModel by activityViewModels()
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private lateinit var filterAdapter: FilterTagAdapter
     private lateinit var guideStepAdapter: GuideStepAdapter
     private lateinit var searchResultAdapter: SearchResultAdapter
 
     private var aMap: AMap? = null
+    /** 仅在为 true 时调用 MapView 生命周期，避免 onCreate 前 onResume 导致闪退 */
+    private var mapViewCreated = false
 
     private lateinit var locationManager: LocationManager
     private var myLocationMarker: com.amap.api.maps.model.Marker? = null
     private var latestLocation: android.location.Location? = null
+    private var latestGcjLatLng: LatLng? = null
+    private var routePolyline: Polyline? = null
+    private var navTargetForExternal: Location? = null
 
     // 搜索相关
     private var cardSearchResults: androidx.cardview.widget.CardView? = null
@@ -68,6 +94,22 @@ class MapFragment : Fragment() {
     private var sheetProgress: ContentLoadingProgressBar? = null
     private var sheetRecycler: RecyclerView? = null
     private var sheetEmpty: TextView? = null
+    private var sheetCover: ImageView? = null
+    private var btnContributeGuide: MaterialButton? = null
+    private var btnFavorite: MaterialButton? = null
+    private var currentSheetLocation: Location? = null
+
+    private val voiceSearchLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val matches = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+        val text = matches?.firstOrNull()
+        if (!text.isNullOrBlank()) {
+            binding.etSearch.setText(text)
+            viewModel.submitSearch(text)
+        }
+    }
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -100,7 +142,10 @@ class MapFragment : Fragment() {
         setupSearchBar()
         setupSearch()
         setupMyLocationButton()
+        setupMenuButton()
+        setupWalkNavigationPanel()
         setupViewModelObservers()
+        observeMainNav()
 
         if (viewModel.isPrivacyAgreed) {
             onPrivacyApproved(savedInstanceState)
@@ -111,18 +156,31 @@ class MapFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        binding.mapView.onResume()
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "S2", "MapFragment.onResume", "map lifecycle",
+            mapOf("mapViewCreated" to mapViewCreated), runId = "crash-fix"
+        )
+        // #endregion
+        if (mapViewCreated) {
+            binding.mapView.onResume()
+        }
     }
 
     override fun onPause() {
         super.onPause()
-        binding.mapView.onPause()
+        if (mapViewCreated) {
+            binding.mapView.onPause()
+        }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         stopSystemLocation()
-        binding.mapView.onDestroy()
+        if (mapViewCreated) {
+            binding.mapView.onDestroy()
+            mapViewCreated = false
+        }
         sheetTitle = null
         sheetRating = null
         sheetHours = null
@@ -137,7 +195,9 @@ class MapFragment : Fragment() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        binding.mapView.onSaveInstanceState(outState)
+        if (mapViewCreated) {
+            binding.mapView.onSaveInstanceState(outState)
+        }
     }
 
     // ── Privacy compliance ──────────────────────────────────────────
@@ -157,7 +217,8 @@ class MapFragment : Fragment() {
                 viewModel.setPrivacyAgreed()
                 MapsInitializer.updatePrivacyShow(requireContext(), true, true)
                 MapsInitializer.updatePrivacyAgree(requireContext(), true)
-                // 隐私 API 已在 mapView.onCreate() 之前调用，直接初始化即可
+                ServiceSettings.updatePrivacyShow(requireContext(), true, true)
+                ServiceSettings.updatePrivacyAgree(requireContext(), true)
                 initMap(savedInstanceState)
             }
             .setNegativeButton("拒绝") { _, _ ->
@@ -176,13 +237,27 @@ class MapFragment : Fragment() {
     private fun onPrivacyApproved(savedInstanceState: Bundle?) {
         MapsInitializer.updatePrivacyShow(requireContext(), true, true)
         MapsInitializer.updatePrivacyAgree(requireContext(), true)
+        ServiceSettings.updatePrivacyShow(requireContext(), true, true)
+        ServiceSettings.updatePrivacyAgree(requireContext(), true)
         initMap(savedInstanceState)
+        // 若用户同意时 Fragment 已处于 RESUMED，需补调一次 onResume
+        if (mapViewCreated && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            binding.mapView.onResume()
+        }
     }
 
     // ── Map initialization ──────────────────────────────────────────
 
     private fun initMap(savedInstanceState: Bundle?) {
+        if (mapViewCreated) return
         binding.mapView.onCreate(savedInstanceState)
+        mapViewCreated = true
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "S2", "MapFragment.initMap", "mapView onCreate done",
+            emptyMap(), runId = "crash-fix"
+        )
+        // #endregion
 
         binding.mapView.map?.let { map ->
             aMap = map
@@ -224,7 +299,7 @@ class MapFragment : Fragment() {
         map.mapType = AMap.MAP_TYPE_NORMAL
 
         val cameraUpdate = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
-            com.amap.api.maps.model.LatLng(25.2851, 110.4131), 16f
+            com.amap.api.maps.model.LatLng(CampusGeo.CENTER_LAT, CampusGeo.CENTER_LNG), 16f
         )
         map.moveCamera(cameraUpdate)
     }
@@ -302,9 +377,30 @@ class MapFragment : Fragment() {
     }
 
     private fun onLocationReceived(location: android.location.Location) {
+        val gcj = com.example.guet_map.util.CoordinateUtil.wgs84ToGcj02(
+            requireContext(),
+            location.latitude,
+            location.longitude
+        )
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "L1",
+            "MapFragment.onLocationReceived",
+            "coord converted",
+            mapOf(
+                "wgsLat" to location.latitude,
+                "wgsLon" to location.longitude,
+                "gcjLat" to gcj.latitude,
+                "gcjLon" to gcj.longitude,
+                "provider" to (location.provider ?: "unknown")
+            ),
+            runId = "post-fix2"
+        )
+        // #endregion
         latestLocation = location
+        latestGcjLatLng = LatLng(gcj.latitude, gcj.longitude)
         val map = aMap ?: return
-        val latLng = LatLng(location.latitude, location.longitude)
+        val latLng = latestGcjLatLng!!
 
         // 更新或创建定位标记
         if (myLocationMarker == null) {
@@ -338,8 +434,11 @@ class MapFragment : Fragment() {
         val map = aMap ?: return
         val loc = latestLocation
         if (loc != null) {
+            val gcj = com.example.guet_map.util.CoordinateUtil.wgs84ToGcj02(
+                requireContext(), loc.latitude, loc.longitude
+            )
             val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
-                LatLng(loc.latitude, loc.longitude), 17f
+                LatLng(gcj.latitude, gcj.longitude), 17f
             )
             map.moveCamera(update)
         } else {
@@ -369,6 +468,18 @@ class MapFragment : Fragment() {
                     viewModel.events.collectLatest { event ->
                         when (event) {
                             is MapEvent.ShowBottomSheet -> showLocationDetail(event.location)
+                            is MapEvent.FocusLocation -> {
+                                moveMapToLocation(event.location)
+                                viewModel.showHighlightMarker(event.location)
+                            }
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.cachedLocations.collectLatest { locations ->
+                        if (locations.isNotEmpty()) {
+                            viewModel.updateMapMarkersFromCache()
                         }
                     }
                 }
@@ -401,8 +512,256 @@ class MapFragment : Fragment() {
                         }
                     }
                 }
+
+                launch {
+                    viewModel.favoriteIds.collectLatest { ids ->
+                        updateFavoriteButton(ids)
+                    }
+                }
+
+                launch {
+                    viewModel.walkRoute.collectLatest { route ->
+                        if (route != null) showWalkRouteOnMap(route) else clearWalkRouteFromMap()
+                    }
+                }
+
+                launch {
+                    viewModel.routeLoading.collectLatest { loading ->
+                        binding.root.findViewById<View>(R.id.progressRoute)?.visibility =
+                            if (loading) View.VISIBLE else View.GONE
+                        if (loading) {
+                            binding.root.findViewById<View>(R.id.cardWalkNav)?.visibility =
+                                View.VISIBLE
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.routeError.collect { msg ->
+                        Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
+    }
+
+    private fun setupWalkNavigationPanel() {
+        binding.root.findViewById<View>(R.id.btnCloseRoute)?.setOnClickListener {
+            viewModel.clearWalkRoute()
+        }
+        binding.root.findViewById<View>(R.id.btnClearRoute)?.setOnClickListener {
+            viewModel.clearWalkRoute()
+        }
+        binding.root.findViewById<View>(R.id.btnOpenAmapNavi)?.setOnClickListener {
+            navTargetForExternal?.let { openAmapExternalNavigation(it) }
+        }
+    }
+
+    private fun showWalkRouteOnMap(route: com.example.guet_map.model.WalkRouteInfo) {
+        val map = aMap ?: return
+        clearWalkRouteFromMap()
+        routePolyline = map.addPolyline(
+            PolylineOptions()
+                .addAll(route.polyline)
+                .width(12f)
+                .color(ContextCompat.getColor(requireContext(), R.color.primary))
+        )
+        val minutes = (route.durationSeconds / 60).coerceAtLeast(1)
+        binding.root.findViewById<android.widget.TextView>(R.id.tvRouteSummary)?.text =
+            getString(
+                R.string.route_summary_format,
+                route.targetName,
+                route.distanceMeters,
+                minutes
+            )
+        binding.root.findViewById<View>(R.id.cardWalkNav)?.visibility = View.VISIBLE
+        binding.root.findViewById<View>(R.id.progressRoute)?.visibility = View.GONE
+
+        val builder = LatLngBounds.builder()
+        route.polyline.forEach { builder.include(it) }
+        map.animateCamera(com.amap.api.maps.CameraUpdateFactory.newLatLngBounds(builder.build(), 120))
+    }
+
+    private fun clearWalkRouteFromMap() {
+        routePolyline?.remove()
+        routePolyline = null
+        binding.root.findViewById<View>(R.id.cardWalkNav)?.visibility = View.GONE
+    }
+
+    private fun showNavigationOptions(location: Location) {
+        navTargetForExternal = location
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.nav_choose_title)
+            .setItems(
+                arrayOf(
+                    getString(R.string.nav_campus_walk),
+                    getString(R.string.nav_amap_app)
+                )
+            ) { _, which ->
+                when (which) {
+                    0 -> startCampusWalkNavigation(location)
+                    1 -> openAmapExternalNavigation(location)
+                }
+            }
+            .show()
+    }
+
+    private fun startCampusWalkNavigation(location: Location) {
+        val start = latestGcjLatLng ?: viewModel.campusCenterLatLng().also {
+            Toast.makeText(requireContext(), R.string.route_no_location, Toast.LENGTH_SHORT).show()
+        }
+        binding.root.findViewById<View>(R.id.cardWalkNav)?.visibility = View.VISIBLE
+        binding.root.findViewById<android.widget.TextView>(R.id.tvRouteTitle)?.text =
+            getString(R.string.campus_walk_route)
+        binding.root.findViewById<android.widget.TextView>(R.id.tvRouteSummary)?.text =
+            getString(R.string.route_planning)
+        viewModel.planWalkRouteTo(location, start)
+    }
+
+    private fun observeMainNav() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    mainNavViewModel.pendingLocationId.collectLatest { locationId ->
+                        // #region agent log
+                        com.example.guet_map.util.AgentDebugLog.log(
+                            "H2",
+                            "MapFragment.observeMainNav",
+                            "pendingLocationId emit",
+                            mapOf("locationId" to locationId)
+                        )
+                        // #endregion
+                        locationId ?: return@collectLatest
+                        val id = mainNavViewModel.consumePendingLocation() ?: return@collectLatest
+                        openLocationOnMap(id)
+                    }
+                }
+                launch {
+                    mainNavViewModel.pendingCategory.collectLatest { category ->
+                        category ?: return@collectLatest
+                        val cat = mainNavViewModel.consumePendingCategory() ?: return@collectLatest
+                        if (::filterAdapter.isInitialized) {
+                            filterAdapter.setSelectedTag(cat)
+                        }
+                        viewModel.filterByCategory(cat)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun openLocationOnMap(locationId: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            // #region agent log
+            com.example.guet_map.util.AgentDebugLog.log(
+                "H1",
+                "MapFragment.openLocationOnMap",
+                "entry",
+                mapOf(
+                    "locationId" to locationId,
+                    "cacheSize" to viewModel.cachedLocations.value.size,
+                    "aMapNull" to (aMap == null)
+                ),
+                runId = "post-fix"
+            )
+            // #endregion
+            val loc = viewModel.resolveAndSelectLocation(locationId)
+            if (loc == null) {
+                // #region agent log
+                com.example.guet_map.util.AgentDebugLog.log(
+                    "H4",
+                    "MapFragment.openLocationOnMap",
+                    "no location after resolve",
+                    mapOf("locationId" to locationId),
+                    runId = "post-fix"
+                )
+                // #endregion
+                return@launch
+            }
+            aMap?.moveCamera(
+                com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
+                    LatLng(loc.latitude, loc.longitude), 17f
+                )
+            )
+            // #region agent log
+            com.example.guet_map.util.AgentDebugLog.log(
+                "H1",
+                "MapFragment.openLocationOnMap",
+                "camera moved",
+                mapOf("locationId" to locationId),
+                runId = "post-fix"
+            )
+            // #endregion
+        }
+    }
+
+    private fun setupMenuButton() {
+        binding.ivMenu.setOnClickListener {
+            showLoginDialog()
+        }
+    }
+
+    private fun showLoginDialog() {
+        val usernameInput = android.widget.EditText(requireContext()).apply {
+            hint = "学号 / 用户名"
+        }
+        val passwordInput = android.widget.EditText(requireContext()).apply {
+            hint = "密码"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val container = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 0)
+            addView(usernameInput)
+            addView(passwordInput)
+        }
+        val title = if (authRepository.isLoggedIn) {
+            "已登录：${authRepository.nickname}（${userPrefs.points} 积分）"
+        } else {
+            getString(R.string.login_title)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(title)
+            .setMessage(getString(R.string.login_hint))
+            .setView(container)
+            .setPositiveButton(if (authRepository.isLoggedIn) "退出" else "登录") { _, _ ->
+                if (authRepository.isLoggedIn) {
+                    authRepository.logout()
+                    Toast.makeText(requireContext(), "已退出登录", Toast.LENGTH_SHORT).show()
+                } else {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        authRepository.login(
+                            usernameInput.text.toString().ifBlank { "guest" },
+                            passwordInput.text.toString().ifBlank { "guest" }
+                        ).collect { resource ->
+                            when (resource) {
+                                is Resource.Success ->
+                                    Toast.makeText(
+                                        requireContext(),
+                                        "欢迎，${resource.data.nickname}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                is Resource.Error ->
+                                    Toast.makeText(
+                                        requireContext(),
+                                        resource.message,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                else -> {}
+                            }
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("关闭", null)
+            .show()
+    }
+
+    private fun updateFavoriteButton(favoriteIds: Set<String>) {
+        val loc = currentSheetLocation ?: return
+        val isFav = loc.locationId in favoriteIds
+        btnFavorite?.text = if (isFav) "已收藏" else "收藏"
     }
 
     // ── BottomSheet 状态更新方法 ────────────────────────────────────
@@ -414,11 +773,14 @@ class MapFragment : Fragment() {
 
     private fun showGuideSteps(steps: List<GuideStep>) {
         sheetProgress?.visibility = View.GONE
-        if (steps.isEmpty()) {
+        val noGuide = steps.isEmpty()
+        if (noGuide) {
             sheetEmpty?.visibility = View.VISIBLE
             guideStepAdapter.submitList(emptyList())
+            btnContributeGuide?.visibility = View.VISIBLE
         } else {
             sheetEmpty?.visibility = View.GONE
+            btnContributeGuide?.visibility = View.GONE
             guideStepAdapter.submitList(steps)
         }
     }
@@ -429,9 +791,21 @@ class MapFragment : Fragment() {
     }
 
     private fun updateSheetHeader(location: Location) {
+        currentSheetLocation = location
         sheetTitle?.text = location.name
         sheetRating?.text = "${location.rating} ★"
         sheetHours?.text = location.openingHours
+        if (location.imageUrl.isNotBlank()) {
+            sheetCover?.visibility = View.VISIBLE
+            sheetCover?.load(location.imageUrl) {
+                crossfade(true)
+                placeholder(R.drawable.bg_image_placeholder)
+                error(R.drawable.bg_image_placeholder)
+            }
+        } else {
+            sheetCover?.visibility = View.GONE
+        }
+        updateFavoriteButton(viewModel.favoriteIds.value)
     }
 
     private fun showLocationDetail(location: Location) {
@@ -475,6 +849,9 @@ class MapFragment : Fragment() {
         sheetProgress = root.findViewById(R.id.progressGuide)
         sheetRecycler = root.findViewById(R.id.rvGuideSteps)
         sheetEmpty = root.findViewById(R.id.tvEmptyGuides)
+        sheetCover = root.findViewById(R.id.ivSheetCover)
+        btnContributeGuide = root.findViewById(R.id.btnContributeGuide)
+        btnFavorite = root.findViewById(R.id.btnFavorite)
     }
 
     private fun configureSheetRecycler() {
@@ -487,14 +864,83 @@ class MapFragment : Fragment() {
 
     private fun configureActionButtons(root: View) {
         root.findViewById<View>(R.id.btnNavigate)?.setOnClickListener {
-            Toast.makeText(requireContext(), "导航功能将在后续版本开放", Toast.LENGTH_SHORT).show()
+            val loc = currentSheetLocation ?: return@setOnClickListener
+            navTargetForExternal = loc
+            startCampusWalkNavigation(loc)
         }
-        root.findViewById<View>(R.id.btnFavorite)?.setOnClickListener {
-            Toast.makeText(requireContext(), "已加入收藏", Toast.LENGTH_SHORT).show()
+        btnFavorite?.setOnClickListener {
+            val loc = currentSheetLocation ?: return@setOnClickListener
+            viewLifecycleOwner.lifecycleScope.launch {
+                val nowFavorite = viewModel.toggleFavorite(loc)
+                Toast.makeText(
+                    requireContext(),
+                    if (nowFavorite) getString(R.string.favorite_added)
+                    else getString(R.string.favorite_removed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
         root.findViewById<View>(R.id.btnShare)?.setOnClickListener {
-            Toast.makeText(requireContext(), "分享功能将在后续版本开放", Toast.LENGTH_SHORT).show()
+            val loc = currentSheetLocation ?: return@setOnClickListener
+            shareLocation(loc)
         }
+        btnContributeGuide?.setOnClickListener {
+            mainNavViewModel.requestTab(R.id.nav_contribute)
+        }
+    }
+
+    private fun openAmapExternalNavigation(location: Location) {
+        val target = viewModel.cachedLocations.value
+            .find { it.locationId == location.locationId } ?: location
+        val pm = requireContext().packageManager
+        try {
+            val start = latestGcjLatLng
+            val uriBuilder = StringBuilder("androidamap://route/plan/?")
+            uriBuilder.append("dlat=${target.latitude}&dlon=${target.longitude}")
+            uriBuilder.append("&dname=${Uri.encode(target.name)}")
+            uriBuilder.append("&dev=0&t=2")
+            if (start != null) {
+                uriBuilder.append("&slat=${start.latitude}&slon=${start.longitude}")
+                uriBuilder.append("&sname=${Uri.encode("我的位置")}")
+            }
+            val amapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uriBuilder.toString())).apply {
+                setPackage("com.autonavi.minimap")
+            }
+            if (amapIntent.resolveActivity(pm) != null) {
+                startActivity(amapIntent)
+                return
+            }
+            val geoUri = Uri.parse(
+                "geo:${target.latitude},${target.longitude}?q=${Uri.encode(target.name)}"
+            )
+            val geoIntent = Intent(Intent.ACTION_VIEW, geoUri)
+            if (geoIntent.resolveActivity(pm) != null) {
+                startActivity(Intent.createChooser(geoIntent, getString(R.string.nav_amap_app)))
+            } else {
+                Toast.makeText(requireContext(), "未找到可用的导航应用", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(
+                requireContext(),
+                "无法打开导航：${e.localizedMessage ?: "未知错误"}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun shareLocation(location: Location) {
+        val text = buildString {
+            appendLine(location.name)
+            appendLine("分类：${location.category}")
+            appendLine("坐标：${location.latitude}, ${location.longitude}")
+            append("来自 GUET Map 校园导航")
+        }
+        startActivity(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+        )
     }
 
     // ── Filter tags ─────────────────────────────────────────────────
@@ -522,8 +968,54 @@ class MapFragment : Fragment() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+        binding.etSearch.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH ||
+                actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            ) {
+                val q = binding.etSearch.text?.toString().orEmpty()
+                if (q.isNotBlank()) {
+                    viewModel.submitSearch(q)
+                    hideSearchResults()
+                }
+                true
+            } else {
+                false
+            }
+        }
         binding.ivVoice.setOnClickListener {
-            Toast.makeText(requireContext(), "语音搜索将在后续版本开放", Toast.LENGTH_SHORT).show()
+            startVoiceSearch()
+        }
+    }
+
+    private fun startVoiceSearch() {
+        if (ContextCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        launchVoiceRecognizer()
+    }
+
+    private val voicePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) launchVoiceRecognizer()
+        else Toast.makeText(requireContext(), "需要麦克风权限才能使用语音搜索", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun launchVoiceRecognizer() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出要搜索的地点")
+        }
+        try {
+            voiceSearchLauncher.launch(intent)
+        } catch (_: Exception) {
+            Toast.makeText(requireContext(), "当前设备不支持语音识别", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -532,13 +1024,8 @@ class MapFragment : Fragment() {
         rvSearchResults = binding.rvSearchResults
 
         searchResultAdapter = SearchResultAdapter { location ->
-            // 选中结果：移动相机 → 展开详情 → 清空搜索
             hideSearchResults()
-            val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
-                LatLng(location.latitude, location.longitude), 17f
-            )
-            aMap?.moveCamera(update)
-            viewModel.selectLocation(location)
+            viewModel.focusOnLocation(location)
         }
         rvSearchResults?.adapter = searchResultAdapter
     }
@@ -546,6 +1033,13 @@ class MapFragment : Fragment() {
     private fun showSearchResults(results: List<Location>) {
         cardSearchResults?.visibility = View.VISIBLE
         searchResultAdapter.submitList(results)
+    }
+
+    private fun moveMapToLocation(location: Location) {
+        val update = com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(
+            LatLng(location.latitude, location.longitude), 17f
+        )
+        aMap?.animateCamera(update)
     }
 
     private fun hideSearchResults() {
