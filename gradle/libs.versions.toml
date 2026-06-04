@@ -30,6 +30,7 @@ coroutines = "1.8.1"
 
 # AMap SDK
 amap3dmap = "10.0.600"
+amapSearch = "9.7.4"
 amapLocation = "6.4.7"
 
 # Image loading
@@ -82,6 +83,7 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 # AMap SDK
 amap-map3d = { group = "com.amap.api", name = "3dmap", version.ref = "amap3dmap" }
 amap-location = { group = "com.amap.api", name = "location", version.ref = "amapLocation" }
+amap-search = { group = "com.amap.api", name = "search", version.ref = "amapSearch" }
 
 # Image loading
 coil = { group = "io.coil-kt", name = "coil", version.ref = "coil" }

@@ -1,44 +1,148 @@
 package com.example.guet_map.network
 
+import com.example.guet_map.model.FavoriteRequest
+import com.example.guet_map.model.LoginRequest
+import com.example.guet_map.util.CampusBuildingCatalog
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 开发阶段 Mock 拦截器：拦截 API 请求并返回样本数据。
- * 接入真实后端后删除此拦截器即可。
+ * 开发阶段 Mock 拦截器。Release 构建通过 [BuildConfig.USE_MOCK_API] 禁用。
  */
 class MockInterceptor : Interceptor {
 
     private val jsonMediaType = "application/json".toMediaType()
+    private val gson = Gson()
+    private val locationsJson: String by lazy {
+        gson.toJson(emptyList<Any>())
+    }
+
+    private val favoritesByUser = ConcurrentHashMap<String, MutableList<String>>()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val path = request.url.encodedPath
+        val method = request.method
+        val category = request.url.queryParameter("category")
+        val mockUserId = resolveMockUserId(request)
 
-        return when {
-            path.matches(Regex("/api/v1/locations")) -> {
-                mockResponse(request, LOCATIONS_JSON)
-            }
-            path.matches(Regex("/api/v1/locations/[^/]+")) -> {
+        val body = when {
+            path == "/api/v1/auth/login" && method == "POST" -> handleLogin(request)
+            path == "/api/v1/categories" -> CATEGORIES_JSON
+            path == "/api/v1/favorites" && method == "GET" -> favoritesJsonForUser(mockUserId)
+            path.matches(Regex("/api/v1/favorites/[^/]+")) && method == "DELETE" -> {
                 val locationId = path.substringAfterLast("/")
-                val locationJson = LOCATION_DETAIL_JSON[locationId]
-                    ?: """{"error":"not found","locationId":"$locationId"}"""
-                mockResponse(request, locationJson)
+                favoritesByUser[mockUserId]?.removeAll { it == locationId }
+                """{"success":true}"""
             }
+            path == "/api/v1/favorites" && method == "POST" -> {
+                val locationId = parseFavoriteLocationId(request)
+                if (locationId != null) {
+                    val list = favoritesByUser.getOrPut(mockUserId) { mutableListOf() }
+                    if (!list.contains(locationId)) list.add(0, locationId)
+                }
+                LOCATION_DETAIL_JSON[locationId ?: "library"] ?: """{"success":true}"""
+            }
+            path == "/api/v1/guides/recent" -> RECENT_GUIDES_JSON
+            path == "/api/v1/guides/mine" -> MY_GUIDES_JSON
+            path == "/api/v1/notifications" -> NOTIFICATIONS_JSON
+            path == "/api/v1/guides/upload" && method == "POST" -> UPLOAD_RESPONSE_JSON
             path.matches(Regex("/api/v1/locations/[^/]+/guides")) -> {
-                val locationId = path.split("/")[4]
-                val guideJson = GUIDE_STEPS_JSON[locationId]
-                    ?: GUIDE_STEPS_JSON["default"]!!
-                mockResponse(request, guideJson)
+                val parts = path.split("/")
+                val locationId = parts.getOrNull(4) ?: "default"
+                GUIDE_STEPS_JSON[locationId] ?: GUIDE_STEPS_JSON["default"]!!
             }
-            path == "/api/v1/guides/upload" && request.method == "POST" -> {
-                mockResponse(request, UPLOAD_RESPONSE_JSON)
+            path.matches(Regex("/api/v1/locations/[^/]+")) && !path.endsWith("/guides") -> {
+                val locationId = path.substringAfterLast("/")
+                LOCATION_DETAIL_JSON[locationId]
+                    ?: CampusBuildingCatalog.toMockLocations()
+                        .find { it.locationId == locationId }
+                        ?.let { gson.toJson(it) }
+                    ?: """{"locationId":"$locationId","name":"未知地点","latitude":25.3070,"longitude":110.4185,"category":"教室","rating":0,"openingHours":"","imageUrl":"","hasGuide":false}"""
             }
-            else -> chain.proceed(request)
+            path == "/api/v1/locations" -> {
+                if (category.isNullOrBlank()) locationsJson
+                else filterLocationsByCategory(category)
+            }
+            else -> null
         }
+
+        return if (body != null) {
+            mockResponse(request, body)
+        } else {
+            chain.proceed(request)
+        }
+    }
+
+    private fun handleLogin(request: okhttp3.Request): String {
+        val login = readBody(request, LoginRequest::class.java)
+        val username = login?.username?.trim().orEmpty().ifBlank { "guest" }
+        MockSession.activeUserId = username
+        if (!favoritesByUser.containsKey(username)) {
+            favoritesByUser[username] = defaultFavoriteIdsForUser(username).toMutableList()
+        }
+        val points = when (username) {
+            "guest" -> 0
+            else -> (username.hashCode() and 0x7FFF) % 50 + 5
+        }
+        return gson.toJson(
+            mapOf(
+                "token" to "mock_token_$username",
+                "nickname" to username,
+                "points" to points,
+                "contributionCount" to 1
+            )
+        )
+    }
+
+    private fun defaultFavoriteIdsForUser(username: String): List<String> = when (username) {
+        "guest" -> emptyList()
+        "2021001" -> listOf("library")
+        "2021002" -> listOf("building_11b", "gate_south")
+        else -> listOf("library", "building_11b").take(
+            1 + (username.hashCode() and 1)
+        )
+    }
+
+    private fun favoritesJsonForUser(userId: String): String {
+        val ids = favoritesByUser[userId] ?: defaultFavoriteIdsForUser(userId)
+        val items = ids.mapNotNull { id -> LOCATION_DETAIL_JSON[id] }
+        if (items.isEmpty()) return "[]"
+        return "[${items.joinToString(",")}]"
+    }
+
+    private fun resolveMockUserId(request: okhttp3.Request): String {
+        val auth = request.header("Authorization").orEmpty()
+        if (auth.startsWith("Bearer mock_token_")) {
+            return auth.removePrefix("Bearer mock_token_").trim()
+        }
+        return MockSession.activeUserId
+    }
+
+    private fun parseFavoriteLocationId(request: okhttp3.Request): String? {
+        val req = readBody(request, FavoriteRequest::class.java) ?: return null
+        return req.locationId
+    }
+
+    private fun <T> readBody(request: okhttp3.Request, type: Class<T>): T? {
+        return try {
+            val buffer = okio.Buffer()
+            request.body?.writeTo(buffer)
+            val json = buffer.readUtf8()
+            if (json.isBlank()) null else gson.fromJson(json, type)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun filterLocationsByCategory(category: String): String {
+        return gson.toJson(emptyList<Any>())
     }
 
     private fun mockResponse(request: okhttp3.Request, body: String): Response {
@@ -52,23 +156,50 @@ class MockInterceptor : Interceptor {
     }
 }
 
-// ── Mock 数据 ─────────────────────────────────────────────────────
+object MockSession {
+    @Volatile
+    var activeUserId: String = "guest"
+}
 
-private val LOCATIONS_JSON = """
+private val CATEGORIES_JSON = """
 [
-  {"locationId":"building_11a","name":"第十一教学楼A区","latitude":25.2865,"longitude":110.4145,"category":"教室","rating":4.3,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11a.jpg","hasGuide":true},
-  {"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.2857,"longitude":110.4141,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true},
-  {"locationId":"canteen_1","name":"第一学生食堂","latitude":25.2840,"longitude":110.4120,"category":"食堂","rating":4.0,"openingHours":"06:30-21:00","imageUrl":"https://example.com/img/canteen1.jpg","hasGuide":false},
-  {"locationId":"canteen_2","name":"第二学生食堂","latitude":25.2830,"longitude":110.4130,"category":"食堂","rating":4.2,"openingHours":"06:30-21:30","imageUrl":"https://example.com/img/canteen2.jpg","hasGuide":true},
-  {"locationId":"library","name":"校图书馆","latitude":25.2870,"longitude":110.4110,"category":"图书馆","rating":4.7,"openingHours":"08:00-22:00","imageUrl":"https://example.com/img/library.jpg","hasGuide":true},
-  {"locationId":"coffee_lab","name":"实验室咖啡","latitude":25.2860,"longitude":110.4150,"category":"咖啡","rating":4.4,"openingHours":"08:30-21:00","imageUrl":"https://example.com/img/coffee.jpg","hasGuide":false},
-  {"locationId":"sports_center","name":"体育中心","latitude":25.2820,"longitude":110.4160,"category":"运动场","rating":4.1,"openingHours":"06:00-22:00","imageUrl":"https://example.com/img/sports.jpg","hasGuide":false},
-  {"locationId":"gate_south","name":"南门","latitude":25.2810,"longitude":110.4130,"category":"校门","rating":4.0,"openingHours":"全天","imageUrl":"https://example.com/img/gate.jpg","hasGuide":true}
+  {"id":"classroom","name":"教室"},
+  {"id":"canteen","name":"食堂"},
+  {"id":"cafe","name":"咖啡"},
+  {"id":"library","name":"图书馆"},
+  {"id":"dorm","name":"宿舍"},
+  {"id":"gate","name":"校门"},
+  {"id":"store","name":"商店"},
+  {"id":"sports","name":"运动场"}
+]
+""".trimIndent()
+
+private val RECENT_GUIDES_JSON = """
+[
+  {"locationId":"building_11b","locationName":"第十一教学楼B区","stepCount":4,"contributor":"同学A","approvedAt":"2026-06-01"},
+  {"locationId":"gate_south","locationName":"南门","stepCount":2,"contributor":"同学B","approvedAt":"2026-05-28"}
+]
+""".trimIndent()
+
+private val MY_GUIDES_JSON = """
+[
+  {"id":101,"locationId":"canteen_1","locationName":"第一学生食堂","status":"pending","stepNumber":1,"description":"从主路右转进入","rejectReason":null,"submittedAt":"2026-06-03"},
+  {"id":102,"locationId":"building_11a","locationName":"第十一教学楼A区","status":"approved","stepNumber":2,"description":"电梯至2楼","rejectReason":null,"submittedAt":"2026-05-20"}
+]
+""".trimIndent()
+
+private val NOTIFICATIONS_JSON = """
+[
+  {"id":1,"type":"review","title":"指引审核通过","body":"您提交的「第十一教学楼A区」步骤已通过，+5积分","locationId":"building_11a","isRead":false,"createdAt":"2026-06-02T10:00:00"},
+  {"id":2,"type":"points","title":"积分到账","body":"您的校园贡献积分已更新为 15","locationId":null,"isRead":false,"createdAt":"2026-06-01T18:30:00"},
+  {"id":3,"type":"announcement","title":"欢迎使用 GUET Map","body":"花江校区实景导航已上线，欢迎贡献指路！","locationId":null,"isRead":true,"createdAt":"2026-05-30T09:00:00"}
 ]
 """.trimIndent()
 
 private val LOCATION_DETAIL_JSON = mapOf(
-    "building_11b" to """{"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.2857,"longitude":110.4141,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true}"""
+    "building_11b" to """{"locationId":"building_11b","name":"第十一教学楼B区","latitude":25.30750,"longitude":110.41780,"category":"教室","rating":4.5,"openingHours":"07:00-22:30","imageUrl":"https://example.com/img/11b.jpg","hasGuide":true}""",
+    "gate_south" to """{"locationId":"gate_south","name":"南门","latitude":25.30200,"longitude":110.41400,"category":"校门","rating":4.3,"openingHours":"","imageUrl":"","hasGuide":true}""",
+    "library" to """{"locationId":"library","name":"校图书馆","latitude":25.2870,"longitude":110.4110,"category":"图书馆","rating":4.7,"openingHours":"08:00-22:00","imageUrl":"https://example.com/img/library.jpg","hasGuide":true}"""
 )
 
 private val GUIDE_STEPS_JSON = mapOf(

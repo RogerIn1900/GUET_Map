@@ -1,11 +1,14 @@
 package com.example.guet_map.ui.contribute
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.widget.ContentLoadingProgressBar
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -16,7 +19,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentContributeBinding
 import dagger.hilt.android.AndroidEntryPoint
+import com.example.guet_map.model.Resource
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -31,13 +37,47 @@ class ContributeFragment : Fragment(R.layout.fragment_contribute) {
 
     private val photoPickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { u ->
-            viewModel.pendingPhotoStepId.value?.let { stepId ->
-                viewModel.setImageUri(stepId, u)
-                viewModel.setPendingPhotoStep("")
-            }
+    ) { uri -> applyPhotoUri(uri) }
+
+    private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "H3",
+            "ContributeFragment.cameraLauncher",
+            "result",
+            mapOf("success" to success, "hasUri" to (pendingCameraUri != null))
+        )
+        // #endregion
+        if (success) pendingCameraUri?.let { applyPhotoUri(it) }
+        pendingCameraUri = null
+    }
+
+    private var pendingCameraUri: android.net.Uri? = null
+
+    private fun applyPhotoUri(uri: android.net.Uri?) {
+        if (uri == null) return
+        val stepId = viewModel.pendingPhotoStepId.value
+        if (stepId.isNullOrBlank()) {
+            Toast.makeText(requireContext(), "未关联到步骤，请重新点击照片区域", Toast.LENGTH_SHORT).show()
+            return
         }
+        viewModel.setImageUri(stepId, uri)
+        viewModel.setPendingPhotoStep(null)
+    }
+
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "C1", "ContributeFragment.cameraPermission", "result",
+            mapOf("granted" to granted), runId = "post-fix2"
+        )
+        // #endregion
+        if (granted) launchCameraInternal()
+        else Toast.makeText(requireContext(), "需要相机权限才能拍照", Toast.LENGTH_SHORT).show()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -61,7 +101,7 @@ class ContributeFragment : Fragment(R.layout.fragment_contribute) {
         stepAdapter = ContributeStepAdapter(
             onPhotoClick = { stepId ->
                 viewModel.setPendingPhotoStep(stepId)
-                photoPickerLauncher.launch("image/*")
+                showPhotoSourceDialog()
             },
             onDescriptionChanged = { stepId, text ->
                 viewModel.updateDescription(stepId, text)
@@ -79,10 +119,62 @@ class ContributeFragment : Fragment(R.layout.fragment_contribute) {
     private fun setupLocationDropdown() {
         binding.actvLocation.setOnItemClickListener { parent, _, position, _ ->
             val selected = parent.getItemAtPosition(position) as String
-            viewModel.selectLocation(
-                locationId = "",   // 自定义输入时无 ID
-                locationName = selected
+            val loc = viewModel.cachedLocations.value.find { it.name == selected }
+            if (loc != null) {
+                viewModel.selectLocation(loc.locationId, loc.name)
+            } else {
+                viewModel.selectLocation("", selected)
+            }
+        }
+    }
+
+    private fun showPhotoSourceDialog() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("添加照片")
+            .setItems(arrayOf("相册", "拍照")) { _, which ->
+                when (which) {
+                    0 -> photoPickerLauncher.launch("image/*")
+                    1 -> launchCamera()
+                }
+            }
+            .show()
+    }
+
+    private fun launchCamera() {
+        when {
+            ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED -> launchCameraInternal()
+            else -> cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun launchCameraInternal() {
+        // #region agent log
+        com.example.guet_map.util.AgentDebugLog.log(
+            "C1", "ContributeFragment.launchCameraInternal", "start", emptyMap(), runId = "post-fix2"
+        )
+        // #endregion
+        try {
+            val photoFile = java.io.File.createTempFile(
+                "capture_", ".jpg", requireContext().cacheDir
             )
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                requireContext(),
+                "${requireContext().packageName}.fileprovider",
+                photoFile
+            )
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            com.example.guet_map.util.AgentDebugLog.log(
+                "C1",
+                "ContributeFragment.launchCameraInternal",
+                "error",
+                mapOf("error" to (e.message ?: e.javaClass.simpleName)),
+                runId = "post-fix2"
+            )
+            Toast.makeText(requireContext(), "无法启动相机: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -107,6 +199,44 @@ class ContributeFragment : Fragment(R.layout.fragment_contribute) {
         binding.btnSubmit.setOnClickListener {
             viewModel.submitSteps()
         }
+
+        binding.btnSaveDraft.setOnClickListener { viewModel.saveDraft() }
+        binding.btnLoadDraft.setOnClickListener { viewModel.loadDraft() }
+        binding.btnMySubmissions.setOnClickListener { showMySubmissionsDialog() }
+    }
+
+    private fun showMySubmissionsDialog() {
+        viewModel.loadMySubmissions()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val resource = viewModel.mySubmissions
+                .filter { it !is Resource.Loading }
+                .first()
+            when (resource) {
+                is Resource.Success -> {
+                    val lines = resource.data.joinToString("\n\n") { item ->
+                        "${item.locationName} · 步骤${item.stepNumber}\n" +
+                            "状态：${statusLabel(item.status)}\n" +
+                            item.description +
+                            (item.rejectReason?.let { "\n驳回：$it" } ?: "")
+                    }.ifBlank { "暂无提交记录" }
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(getString(R.string.my_submissions))
+                        .setMessage(lines)
+                        .setPositiveButton("确定", null)
+                        .show()
+                }
+                is Resource.Error ->
+                    Toast.makeText(requireContext(), resource.message, Toast.LENGTH_SHORT).show()
+                else -> {}
+            }
+        }
+    }
+
+    private fun statusLabel(status: String) = when (status) {
+        "approved" -> "已通过"
+        "rejected" -> "已驳回"
+        "pending" -> "待审核"
+        else -> status
     }
 
     // ── ViewModel observers ───────────────────────────────────
@@ -136,6 +266,14 @@ class ContributeFragment : Fragment(R.layout.fragment_contribute) {
                 launch {
                     viewModel.userPoints.collectLatest { points ->
                         binding.tvPoints.text = points.toString()
+                    }
+                }
+
+                launch {
+                    viewModel.selectedLocationName.collectLatest { name ->
+                        if (name.isNotBlank()) {
+                            binding.actvLocation.setText(name, false)
+                        }
                     }
                 }
 

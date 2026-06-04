@@ -18,6 +18,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        buildConfigField("String", "BASE_URL", "\"https://api.guetmap.example.com/\"")
+
         ndk {
             // 高德 3D SDK 仅提供 ARM 原生库，x86_64 模拟器通过 libndk_translation 翻译运行
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -25,8 +27,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "USE_MOCK_API", "true")
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("boolean", "USE_MOCK_API", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -42,6 +48,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
@@ -84,8 +91,8 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
-    // AMap SDK (3D地图已包含定位功能)
-    implementation(libs.amap.map3d)
+    // 高德合包：3D 地图 + 定位 + 搜索（PoiSearch），避免 3dmap 与 search 单独引入时的重复类
+    implementation("com.amap.api:3dmap-location-search:latest.integration")
 
     // Image loading
     implementation(libs.coil)
