@@ -25,6 +25,9 @@ dependencyResolutionManagement {
         maven { url = uri("https://maven.aliyun.com/repository/public") }
         maven { url = uri("https://a.amap.com/lbs/static/unzip/AndroidMapSDK/android_studio/") }
 
+        // MPAndroidChart
+        maven { url = uri("https://jitpack.io") }
+
     }
 }
 
