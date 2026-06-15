@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
+
+    <!-- 日期 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.2"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="06月15日"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvWeekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="周日"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 天气图标 -->
+    <ImageView
+        android:id="@+id/ivWeatherIcon"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:contentDescription="天气图标" />
+
+    <!-- 降水概率 -->
+    <TextView
+        android:id="@+id/tvPrecip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:text="10%"
+        android:textColor="#42A5F5"
+        android:textSize="12sp"
+        android:minWidth="32dp"
+        android:gravity="center" />
+
+    <!-- 高温 -->
+    <TextView
+        android:id="@+id/tvTempHigh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:minWidth="36dp"
+        android:gravity="end"
+        android:text="32°"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <!-- 温度条 -->
+    <View
+        android:layout_width="60dp"
+        android:layout_height="4dp"
+        android:layout_marginHorizontal="6dp" />
+
+    <!-- 低温 -->
+    <TextView
+        android:id="@+id/tvTempLow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="36dp"
+        android:text="24°"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="14sp" />
+
+    <!-- UV -->
+    <TextView
+        android:id="@+id/tvUv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="UV 5"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="11sp" />
+
+</LinearLayout>

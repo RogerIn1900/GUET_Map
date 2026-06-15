@@ -1,6 +1,6 @@
 package com.example.guet_map.module.social.domain.usecase
 
-import com.example.guet_map.module.social.data.model.Weather
+import com.example.guet_map.module.social.data.model.WeatherForecast
 import com.example.guet_map.module.social.data.repository.WeatherRepository
 import com.example.guet_map.model.Resource
 import kotlinx.coroutines.flow.Flow
@@ -20,15 +20,30 @@ class GetWeatherUseCase @Inject constructor(
     suspend operator fun invoke(
         latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
         longitude: Double = WeatherRepository.DEFAULT_LONGITUDE
-    ): Resource<Weather> {
+    ): Resource<com.example.guet_map.module.social.data.model.Weather> {
         return weatherRepository.getWeather(latitude, longitude)
     }
 
     /**
      * 观察天气变化（Flow）
      */
-    fun observe(): Flow<Weather?> {
+    fun observe(): Flow<com.example.guet_map.module.social.data.model.Weather?> {
         return weatherRepository.observeWeather()
+    }
+}
+
+/**
+ * 获取完整天气预报（含16天日报）
+ */
+class GetWeatherForecastUseCase @Inject constructor(
+    private val weatherRepository: WeatherRepository
+) {
+    suspend operator fun invoke(
+        latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
+        longitude: Double = WeatherRepository.DEFAULT_LONGITUDE,
+        locationName: String = WeatherRepository.DEFAULT_LOCATION_NAME
+    ): Resource<WeatherForecast> {
+        return weatherRepository.getWeatherForecast(latitude, longitude, locationName)
     }
 }
 
@@ -46,7 +61,7 @@ class RefreshWeatherUseCase @Inject constructor(
     suspend operator fun invoke(
         latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
         longitude: Double = WeatherRepository.DEFAULT_LONGITUDE
-    ): Resource<Weather> {
+    ): Resource<com.example.guet_map.module.social.data.model.Weather> {
         return weatherRepository.refreshWeather(latitude, longitude)
     }
 }
