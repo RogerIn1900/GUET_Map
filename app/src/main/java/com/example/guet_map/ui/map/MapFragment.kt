@@ -42,7 +42,6 @@ import com.example.guet_map.ui.map.state.MapUiEvent
 import com.example.guet_map.ui.map.state.MapUiState
 import com.example.guet_map.util.CampusGeo
 import com.example.guet_map.util.CoordinateUtil
-import com.example.guet_map.util.FetchWeatherSafetyUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -53,7 +52,6 @@ class MapFragment : Fragment() {
 
     @Inject lateinit var authRepository: com.example.guet_map.repository.AuthRepository
     @Inject lateinit var userPrefs: com.example.guet_map.data.UserPrefs
-    @Inject lateinit var fetchWeatherSafetyUseCase: FetchWeatherSafetyUseCase
 
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
@@ -484,22 +482,25 @@ class MapFragment : Fragment() {
     }
 
     private fun stopLocationServices() {
-        aMapLocationClient?.stop()
-        aMapLocationClient?.destroy()
+        LocationCallbackHelper.stop()
+        LocationCallbackHelper.destroy()
         aMapLocationClient = null
     }
 
     private fun initAndStartAmapLocation() {
-        aMapLocationClient = AMapLocationClient(requireContext())
-        aMapLocationClient?.onLocationResult = { amapLocation ->
-            onAmapLocationReceived(amapLocation)
+        aMapLocationClient = com.amap.api.location.AMapLocationClient(requireContext())
+        aMapLocationClient?.setLocationListener { amapLocation ->
+            LocationCallbackHelper.onLocationResult?.invoke(amapLocation)
         }
-        aMapLocationClient?.onLocationError = { _, _ -> }
-        aMapLocationClient?.start()
+        aMapLocationClient?.startLocation()
     }
 
     private fun onAmapLocationReceived(amapLocation: com.amap.api.location.AMapLocation) {
-        val location = AMapLocationClient.toStandardLocation(amapLocation)
+        val location = android.location.Location("").apply {
+            latitude = amapLocation.latitude
+            longitude = amapLocation.longitude
+            accuracy = amapLocation.accuracy
+        }
         onLocationReceived(location, amapLocation)
     }
 
@@ -733,7 +734,7 @@ class MapFragment : Fragment() {
     }
 
     companion object {
-        private object AMapLocationClient {
+        private object LocationCallbackHelper {
             fun requireContext(): android.content.Context = throw IllegalStateException("Not initialized")
             var onLocationResult: ((com.amap.api.location.AMapLocation) -> Unit)? = null
             var onLocationError: ((Int, String) -> Unit)? = null

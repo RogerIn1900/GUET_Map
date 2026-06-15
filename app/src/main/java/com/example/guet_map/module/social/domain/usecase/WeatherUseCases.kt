@@ -12,10 +12,21 @@ import javax.inject.Inject
 class GetWeatherUseCase @Inject constructor(
     private val weatherRepository: WeatherRepository
 ) {
-    suspend operator fun invoke(): Resource<Weather> {
-        return weatherRepository.getWeather()
+    /**
+     * 获取天气
+     * @param latitude 纬度，默认桂林电子科技大学
+     * @param longitude 经度，默认桂林电子科技大学
+     */
+    suspend operator fun invoke(
+        latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
+        longitude: Double = WeatherRepository.DEFAULT_LONGITUDE
+    ): Resource<Weather> {
+        return weatherRepository.getWeather(latitude, longitude)
     }
 
+    /**
+     * 观察天气变化（Flow）
+     */
     fun observe(): Flow<Weather?> {
         return weatherRepository.observeWeather()
     }
@@ -27,7 +38,15 @@ class GetWeatherUseCase @Inject constructor(
 class RefreshWeatherUseCase @Inject constructor(
     private val weatherRepository: WeatherRepository
 ) {
-    suspend operator fun invoke(): Resource<Weather> {
-        return weatherRepository.refreshWeather()
+    /**
+     * 强制刷新天气
+     * @param latitude 纬度
+     * @param longitude 经度
+     */
+    suspend operator fun invoke(
+        latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
+        longitude: Double = WeatherRepository.DEFAULT_LONGITUDE
+    ): Resource<Weather> {
+        return weatherRepository.refreshWeather(latitude, longitude)
     }
 }

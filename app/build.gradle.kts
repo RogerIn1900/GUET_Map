@@ -52,6 +52,13 @@ android {
     }
 }
 
+// KSP 配置 - 禁用增量编译解决跨平台缓存问题
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "false")
+    arg("room.expandProjection", "true")
+}
+
 dependencies {
     // AndroidX
     implementation(libs.androidx.core.ktx)

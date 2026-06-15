@@ -1,4 +1,7 @@
 pluginManagement {
+    // 加载跨平台检测脚本
+    apply(from = "gradle-detect-platform.gradle.kts")
+
     repositories {
         // 官方源优先
         google()

@@ -49,9 +49,9 @@ class LegacyFavoriteRepository @Inject constructor(
             combine(
                 legacyFavoriteDao.observeAll(uid),
                 legacyLocationDao.getAllLocations()
-            ) { favorites, locations ->
+            ) { favorites: List<LegacyFavoriteEntity>, locations ->
                 val byId = locations.associateBy { it.locationId }
-                favorites.mapNotNull { fav ->
+                favorites.mapNotNull { fav: LegacyFavoriteEntity ->
                     byId[fav.locationId]?.let { entity ->
                         Location(
                             locationId = entity.locationId,

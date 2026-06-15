@@ -1,3 +1,11 @@
 # Default ignored files
 /shelf/
 /workspace.xml
+# Platform-specific settings
+/gradle.xml
+/misc.xml
+/material_theme_project_new.xml
+/deploymentTargetSelector.xml
+/deviceManager.xml
+/appInsightsSettings.xml
+/caches/
