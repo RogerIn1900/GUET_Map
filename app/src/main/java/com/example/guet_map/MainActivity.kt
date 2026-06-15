@@ -1,6 +1,7 @@
 package com.example.guet_map
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -12,6 +13,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.example.guet_map.R
 import com.example.guet_map.databinding.ActivityMainBinding
+import com.example.guet_map.module.ai.ui.chat.ChatFragment
 import com.example.guet_map.ui.MainNavViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -35,7 +37,20 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         applyWindowInsets()
+        setupNavigation()
+        setupAiActionListener()
 
+        // 处理从悬浮球打开 AI 聊天
+        if (intent.getBooleanExtra("open_ai_chat", false)) {
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    mainNavViewModel.requestTab(R.id.nav_chat)
+                }
+            }
+        }
+    }
+
+    private fun setupNavigation() {
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.navHostFragment) as NavHostFragment
         val navController = navHostFragment.navController
@@ -73,6 +88,71 @@ class MainActivity : AppCompatActivity() {
                         navController.navigate(R.id.nav_weather_detail)
                     }
                 }
+            }
+        }
+    }
+
+    private fun setupAiActionListener() {
+        supportFragmentManager.setFragmentResultListener(
+            ChatFragment.REQUEST_KEY_AI_ACTION,
+            this
+        ) { _, bundle ->
+            handleAiAction(bundle)
+        }
+    }
+
+    private fun handleAiAction(bundle: Bundle) {
+        val actionType = bundle.getString(ChatFragment.KEY_ACTION_TYPE) ?: return
+
+        when (actionType) {
+            ChatFragment.ACTION_NAVIGATE_TO -> {
+                val targetName = bundle.getString(ChatFragment.KEY_TARGET_NAME)
+                val targetLocationId = bundle.getString(ChatFragment.KEY_TARGET_LOCATION_ID)
+                val fallbackQuery = bundle.getString(ChatFragment.KEY_FALLBACK_QUERY)
+                handleNavigateTo(targetName, targetLocationId, fallbackQuery)
+            }
+            ChatFragment.ACTION_SHOW_ROUTE -> {
+                val summary = bundle.getString(ChatFragment.KEY_ROUTE_SUMMARY)
+                Toast.makeText(this, summary ?: "路线已规划", Toast.LENGTH_SHORT).show()
+            }
+            ChatFragment.ACTION_SHOW_WEATHER -> {
+                val description = bundle.getString(ChatFragment.KEY_WEATHER_DESCRIPTION)
+                val temperature = bundle.getInt(ChatFragment.KEY_WEATHER_TEMPERATURE, 0)
+                Toast.makeText(
+                    this,
+                    "天气：$description，${temperature}°C",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun handleNavigateTo(targetName: String?, targetLocationId: String?, fallbackQuery: String?) {
+        // 传递位置 ID 给 MapFragment（同时切换到地图 Tab）
+        val locationId = targetLocationId ?: fallbackQuery
+        if (locationId != null) {
+            mainNavViewModel.openLocationOnMap(locationId)
+            Toast.makeText(
+                this,
+                "正在导航到：${targetName ?: locationId}",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            // 没有位置 ID 时，尝试用名称搜索
+            val searchQuery = targetName ?: fallbackQuery
+            if (searchQuery != null) {
+                mainNavViewModel.openLocationOnMap(searchQuery)
+                Toast.makeText(
+                    this,
+                    "正在搜索：$searchQuery",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    "无法确定目标位置",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }

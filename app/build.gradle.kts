@@ -19,6 +19,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "BASE_URL", "\"https://api.guetmap.example.com/\"")
+        buildConfigField("String", "DEEPSEEK_API_KEY", "\"\"")
 
         ndk {
             // 高德 3D SDK 仅提供 ARM 原生库，x86_64 模拟器通过 libndk_translation 翻译运行

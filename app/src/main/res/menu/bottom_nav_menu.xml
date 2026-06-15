@@ -17,7 +17,7 @@
         android:icon="@drawable/ic_add"
         android:title="" />
     <item
-        android:id="@+id/nav_notifications"
-        android:icon="@drawable/ic_notifications"
+        android:id="@+id/nav_chat"
+        android:icon="@drawable/ic_chat"
         android:title="" />
 </menu>
