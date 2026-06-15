@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
+import com.example.guet_map.R
 import com.example.guet_map.databinding.ActivityMainBinding
 import com.example.guet_map.ui.MainNavViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -58,9 +59,18 @@ class MainActivity : AppCompatActivity() {
                             try {
                                 navController.navigate(consumed)
                             } catch (_: Exception) {
-                                // 如果导航失败（目的地可能不存在于 navGraph），忽略以避免二次崩溃
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavViewModel.pendingWeatherDetail.collectLatest { pending ->
+                    if (pending && mainNavViewModel.consumeWeatherDetailRequest()) {
+                        navController.navigate(R.id.nav_weather_detail)
                     }
                 }
             }

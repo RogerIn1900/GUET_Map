@@ -226,6 +226,10 @@ class MapFragment : Fragment() {
         binding.ivVoice.setOnClickListener {
             startVoiceSearch()
         }
+
+        binding.cardWeatherSafety.setOnClickListener {
+            mainNavViewModel.requestWeatherDetail()
+        }
     }
 
     private fun startVoiceSearch() {
