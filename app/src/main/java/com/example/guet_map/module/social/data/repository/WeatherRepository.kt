@@ -4,7 +4,10 @@ import com.example.guet_map.model.Resource
 import com.example.guet_map.module.social.data.local.dao.WeatherDao
 import com.example.guet_map.module.social.data.local.entity.WeatherEntity
 import com.example.guet_map.module.social.data.model.Weather
-import com.example.guet_map.module.social.data.remote.OpenMeteoApiService
+import com.example.guet_map.module.social.data.model.WeatherForecast
+import com.example.guet_map.module.social.data.remote.AmapWeatherApiService
+import com.example.guet_map.module.social.data.remote.CityAdcodeResolver
+import com.example.guet_map.module.social.data.remote.dto.toDailyForecast
 import com.example.guet_map.module.social.data.remote.dto.toDomain
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -16,12 +19,15 @@ import javax.inject.Singleton
 
 /**
  * 天气数据仓库
- * 采用缓存优先策略：先返回缓存，后台静默刷新
+ *
+ * 使用高德（AMap）Web 天气 API，国内直连稳定。
+ * 策略：缓存优先（30 分钟有效） + 网络拉新 + 失败回退到缓存。
  */
 @Singleton
 class WeatherRepository @Inject constructor(
     private val weatherDao: WeatherDao,
-    private val openMeteoApi: OpenMeteoApiService,
+    private val amapWeatherApi: AmapWeatherApiService,
+    private val cityAdcodeResolver: CityAdcodeResolver,
     private val gson: Gson
 ) {
 
@@ -43,16 +49,12 @@ class WeatherRepository @Inject constructor(
         longitude: Double = DEFAULT_LONGITUDE
     ): Resource<Weather> {
         return try {
-            // 检查缓存
             val cached = weatherDao.getLatestWeather()
             if (cached != null && isCacheValid(cached.cachedAt)) {
                 return Resource.Success(cached.toDomain())
             }
-
-            // 请求 API
             fetchAndCacheWeather(latitude, longitude)
         } catch (e: IOException) {
-            // 网络错误，尝试返回缓存
             val cached = weatherDao.getLatestWeather()
             if (cached != null) {
                 Resource.Success(cached.toDomain())
@@ -81,29 +83,61 @@ class WeatherRepository @Inject constructor(
     }
 
     /**
+     * 获取完整天气预报（实时 + 4 天预报）
+     */
+    suspend fun getWeatherForecast(
+        latitude: Double = DEFAULT_LATITUDE,
+        longitude: Double = DEFAULT_LONGITUDE,
+        locationName: String = DEFAULT_LOCATION_NAME
+    ): Resource<WeatherForecast> {
+        return try {
+            val city = cityAdcodeResolver.resolve(latitude, longitude)
+
+            val liveResp = amapWeatherApi.getLiveWeather(city = city)
+            val weather = liveResp.toDomain()
+                ?: return Resource.Error(liveResp.info ?: "获取天气数据失败")
+
+            val forecastResp = amapWeatherApi.getWeatherForecast(city = city)
+            val dailyForecast = forecastResp.toDailyForecast(
+                fallbackHumidity = weather.humidity,
+                fallbackUv = weather.uvIndex ?: 0
+            )
+
+            // 持久化当前天气
+            weatherDao.insertWeather(weather.toEntity())
+
+            Resource.Success(
+                WeatherForecast(
+                    current = weather,
+                    dailyForecast = dailyForecast,
+                    locationName = locationName,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+            )
+        } catch (e: IOException) {
+            Resource.Error("网络不可用，请检查网络连接")
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "获取天气预报失败")
+        }
+    }
+
+    /**
      * 从 API 获取天气并缓存
      */
     private suspend fun fetchAndCacheWeather(
         latitude: Double,
         longitude: Double
     ): Resource<Weather> {
-        val response = openMeteoApi.getWeatherForecast(
-            latitude = latitude,
-            longitude = longitude
-        )
-
-        if (response.current == null) {
-            return Resource.Error("获取天气数据失败")
-        }
-
+        val city = cityAdcodeResolver.resolve(latitude, longitude)
+        val response = amapWeatherApi.getLiveWeather(city = city)
         val weather = response.toDomain()
+            ?: return Resource.Error(response.info ?: "获取天气数据失败")
+
         weatherDao.insertWeather(weather.toEntity())
         return Resource.Success(weather)
     }
 
-    /**
-     * 检查缓存是否有效 (30分钟有效期)
-     */
     private fun isCacheValid(cachedAt: Long): Boolean {
         return System.currentTimeMillis() - cachedAt < CACHE_VALIDITY_MS
     }
@@ -149,11 +183,15 @@ class WeatherRepository @Inject constructor(
     )
 
     companion object {
-        // 默认桂林电子科技大学坐标
+        // 默认地点：桂林电子科技大学
         const val DEFAULT_LATITUDE = 25.27
         const val DEFAULT_LONGITUDE = 110.29
+        const val DEFAULT_LOCATION_NAME = "桂林电子科技大学"
 
-        // 缓存有效期: 30分钟
+        // 高德天气 adcode：桂林市
+        const val DEFAULT_CITY_ADCODE = "450300"
+
+        // 缓存有效期: 30 分钟
         private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L
     }
 }

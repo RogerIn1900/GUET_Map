@@ -1,6 +1,6 @@
 package com.example.guet_map.module.social.di
 
-import com.example.guet_map.module.social.data.remote.OpenMeteoApiService
+import com.example.guet_map.module.social.data.remote.AmapWeatherApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,6 +13,8 @@ import javax.inject.Singleton
 
 /**
  * Weather 模块依赖注入配置
+ *
+ * 使用高德 Web 天气 API（国内直连稳定），与 Android 端 AMap SDK 共用同一个 Key。
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -20,10 +22,10 @@ object WeatherModule {
 
     @Provides
     @Singleton
-    @Named("openmeteo")
-    fun provideOpenMeteoRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    @Named("amap_weather")
+    fun provideAmapWeatherRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(OpenMeteoApiService.BASE_URL)
+            .baseUrl(AmapWeatherApiService.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -31,7 +33,9 @@ object WeatherModule {
 
     @Provides
     @Singleton
-    fun provideOpenMeteoApiService(@Named("openmeteo") retrofit: Retrofit): OpenMeteoApiService {
-        return retrofit.create(OpenMeteoApiService::class.java)
+    fun provideAmapWeatherApiService(
+        @Named("amap_weather") retrofit: Retrofit
+    ): AmapWeatherApiService {
+        return retrofit.create(AmapWeatherApiService::class.java)
     }
 }
