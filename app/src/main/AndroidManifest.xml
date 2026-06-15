@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Android 12+ 精准定位 approval -->
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
@@ -59,6 +62,26 @@
 
         <!-- 高德定位服务 -->
         <service android:name="com.amap.api.location.APSService" />
+
+        <!-- AI 悬浮窗服务 -->
+        <service
+            android:name=".module.ai.ui.floating.FloatingWindowService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="ai_assistant_floating_window" />
+        </service>
+
+        <!-- AI 悬浮球服务 -->
+        <service
+            android:name=".module.ai.ui.bubble.FloatingBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="ai_assistant_bubble" />
+        </service>
     </application>
 
 </manifest>
