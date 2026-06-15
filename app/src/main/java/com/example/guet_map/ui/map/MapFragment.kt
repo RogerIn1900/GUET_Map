@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
 import android.speech.RecognizerIntent
+import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +30,7 @@ import com.amap.api.services.core.ServiceSettings
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentMapBinding
+import com.example.guet_map.module.ai.ui.floating.FloatingWindowService
 import com.example.guet_map.model.Location
 import com.example.guet_map.model.Resource
 import com.example.guet_map.ui.MainNavViewModel
@@ -64,7 +67,7 @@ class MapFragment : Fragment() {
     private var aMap: AMap? = null
     private var mapViewCreated = false
 
-    private var aMapLocationClient: com.amap.api.location.AMapLocationClient? = null
+    private var aMapLocationClient: AMapLocationClient? = null
     private var myLocationMarker: com.amap.api.maps.model.Marker? = null
     private var latestLocation: android.location.Location? = null
     private var latestGcjLatLng: LatLng? = null
@@ -209,6 +212,10 @@ class MapFragment : Fragment() {
     private fun setupClickListeners() {
         binding.fabMyLocation.setOnClickListener {
             centerOnMyLocation()
+        }
+
+        binding.fabAiChat.setOnClickListener {
+            requestOverlayPermissionAndStartFloatingWindow()
         }
 
         binding.ivMenu.setOnClickListener {
@@ -696,7 +703,28 @@ class MapFragment : Fragment() {
                         LatLng(loc.latitude, loc.longitude), 17f
                     )
                 )
+                // AI 导航：自动开始步行导航
+                startWalkNavigation(loc)
             }
+        }
+    }
+
+    private fun requestOverlayPermissionAndStartFloatingWindow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(requireContext())) {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("需要悬浮窗权限")
+                .setMessage("AI 助手需要悬浮窗权限才能显示在屏幕上。请在设置中开启此权限。")
+                .setPositiveButton("去设置") { _, _ ->
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${requireContext().packageName}")
+                    )
+                    startActivity(intent)
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        } else {
+            FloatingWindowService.start(requireContext())
         }
     }
 
@@ -732,21 +760,4 @@ class MapFragment : Fragment() {
             .show()
     }
 
-    companion object {
-        private object AMapLocationClient {
-            fun requireContext(): android.content.Context = throw IllegalStateException("Not initialized")
-            var onLocationResult: ((com.amap.api.location.AMapLocation) -> Unit)? = null
-            var onLocationError: ((Int, String) -> Unit)? = null
-            fun start() {}
-            fun stop() {}
-            fun destroy() {}
-            fun toStandardLocation(amapLocation: com.amap.api.location.AMapLocation): android.location.Location {
-                return android.location.Location("").apply {
-                    latitude = amapLocation.latitude
-                    longitude = amapLocation.longitude
-                    accuracy = amapLocation.accuracy
-                }
-            }
-        }
-    }
 }

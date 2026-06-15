@@ -1,51 +1,127 @@
 package com.example.guet_map.module.ai.domain.service
 
+import com.example.guet_map.model.Resource
+import com.example.guet_map.module.ai.data.local.AiPromptProvider
+import com.example.guet_map.module.ai.data.model.AiAction
+import com.example.guet_map.module.ai.data.model.AiResponse
 import com.example.guet_map.module.ai.data.model.ChatMessage
 import com.example.guet_map.module.ai.data.model.ChatRole
+import com.example.guet_map.module.ai.data.remote.DeepSeekApi
+import com.example.guet_map.module.ai.data.remote.DeepSeekConfigProvider
+import com.example.guet_map.module.ai.data.remote.DeepSeekConstants
+import com.example.guet_map.module.ai.data.remote.DeepSeekMessage
+import com.example.guet_map.module.ai.data.remote.DeepSeekRequest
 import com.example.guet_map.module.ai.data.repository.ChatRepository
-import com.example.guet_map.model.Resource
+import com.example.guet_map.module.ai.domain.parser.AiResponseParser
+import com.example.guet_map.module.social.data.repository.WeatherRepository
+import com.example.guet_map.util.FetchWeatherSafetyUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * AI 服务实现（Mock 版本）
- * 后续可替换为真实的 GPT API 调用
+ * AI 服务实现：接入 DeepSeek deepseek-chat，并在失败时安全降级。
  */
 @Singleton
 class AiServiceImpl @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val promptProvider: AiPromptProvider,
+    private val responseParser: AiResponseParser,
+    private val deepSeekApi: DeepSeekApi,
+    private val configProvider: DeepSeekConfigProvider,
+    private val weatherRepository: WeatherRepository,
+    private val fetchWeatherSafetyUseCase: FetchWeatherSafetyUseCase
 ) : AiService {
 
     override suspend fun sendMessage(
         sessionId: String,
         userMessage: String,
-        locationContext: String?
+        locationContext: String?,
+        navigationCallback: AiNavigationCallback?
     ): Resource<ChatMessage> {
         return try {
-            // 保存用户消息
             chatRepository.saveMessage(sessionId, ChatRole.USER, userMessage)
 
-            // 模拟 AI 思考延迟
-            delay(800)
+            val parsed = requestAiResponse(
+                userMessage = userMessage,
+                locationContext = locationContext
+            )
 
-            // 生成回复（后续替换为真实 API）
-            val response = generateMockResponse(userMessage, locationContext)
+            // 处理 AI Action
+            var responseText = parsed.text ?: "AI 已返回结果，但暂时无法展示完整内容。"
+            if (parsed.responseType == AiResponse.ResponseType.ACTION && parsed.action != null) {
+                handleNavigationAction(parsed.action, navigationCallback, locationContext)
+            }
 
-            // 保存 AI 回复
             val assistantMessage = chatRepository.saveMessage(
                 sessionId = sessionId,
                 role = ChatRole.ASSISTANT,
-                content = response,
+                content = responseText,
                 locationId = locationContext
             )
 
             Resource.Success(assistantMessage)
         } catch (e: Exception) {
-            Resource.Error(e.message ?: "AI 服务异常")
+            // 超时或网络错误时，使用本地降级响应
+            val fallbackText = fallbackLocalResponse(userMessage, locationContext)
+            val assistantMessage = chatRepository.saveMessage(
+                sessionId = sessionId,
+                role = ChatRole.ASSISTANT,
+                content = fallbackText,
+                locationId = locationContext
+            )
+            Resource.Success(assistantMessage)
+        }
+    }
+
+    private suspend fun handleNavigationAction(
+        action: AiAction,
+        callback: AiNavigationCallback?,
+        locationContext: String?
+    ) {
+        when (action.action) {
+            AiAction.ActionType.NAVIGATE_TO -> {
+                val targetName = action.payload["targetName"]?.toString() ?: ""
+                val locationId = action.payload["targetLocationId"]?.toString()
+                val fallbackQuery = action.payload["fallbackQuery"]?.toString()
+                callback?.navigateTo(locationId, targetName, fallbackQuery)
+            }
+            AiAction.ActionType.SHOW_ROUTE -> {
+                val targetName = action.payload["targetName"]?.toString() ?: ""
+                val fallbackQuery = action.payload["fallbackQuery"]?.toString()
+                callback?.showRoute(locationContext, targetName, fallbackQuery)
+            }
+            else -> {
+                // 其他 action 类型暂不处理
+            }
+        }
+    }
+
+    override suspend fun sendStructuredMessage(
+        sessionId: String,
+        userMessage: String,
+        locationContext: String?
+    ): Resource<AiResponse> {
+        return try {
+            chatRepository.saveMessage(sessionId, ChatRole.USER, userMessage)
+
+            val parsed = requestAiResponse(
+                userMessage = userMessage,
+                locationContext = locationContext
+            )
+            chatRepository.saveMessage(
+                sessionId = sessionId,
+                role = ChatRole.ASSISTANT,
+                content = parsed.text ?: "AI 已返回结构化结果。",
+                locationId = locationContext
+            )
+
+            Resource.Success(parsed)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "AI 服务异常，请稍后再试")
         }
     }
 
@@ -55,29 +131,10 @@ class AiServiceImpl @Inject constructor(
         locationContext: String?
     ): Flow<Resource<String>> = flow {
         emit(Resource.Loading)
-
-        try {
-            // 保存用户消息
-            chatRepository.saveMessage(sessionId, ChatRole.USER, userMessage)
-
-            // 模拟流式响应
-            val response = generateMockResponse(userMessage, locationContext)
-            val words = response.split("")
-
-            for (word in words) {
-                delay(50)
-                emit(Resource.Success(word))
-            }
-
-            // 保存完整回复
-            chatRepository.saveMessage(
-                sessionId = sessionId,
-                role = ChatRole.ASSISTANT,
-                content = response,
-                locationId = locationContext
-            )
-        } catch (e: Exception) {
-            emit(Resource.Error(e.message ?: "AI 服务异常"))
+        when (val result = sendMessage(sessionId, userMessage, locationContext)) {
+            is Resource.Success -> emit(Resource.Success(result.data.content))
+            is Resource.Error -> emit(Resource.Error(result.message))
+            is Resource.Loading -> emit(Resource.Loading)
         }
     }
 
@@ -85,33 +142,137 @@ class AiServiceImpl @Inject constructor(
         return Resource.Success(
             listOf(
                 "这个地点怎么走？",
-                "附近有什么好吃的？",
-                "开放时间是什么时候？",
-                "有没有停车的地方？"
+                "带我去下一节课",
+                "附近有什么校园设施？",
+                "如果我要上课，应该怎么走？"
             )
         )
     }
 
-    private fun generateMockResponse(message: String, locationContext: String?): String {
+    private suspend fun requestAiResponse(
+        userMessage: String,
+        locationContext: String?
+    ): AiResponse {
+        val apiKey = configProvider.getApiKey()
+        if (apiKey.isNullOrBlank()) {
+            return responseParser.parse(fallbackLocalResponse(userMessage, locationContext))
+        }
+
+        val messages = promptProvider.buildMessages(
+            userMessage = userMessage,
+            locationContext = locationContext,
+            history = emptyList()
+        )
+        val rawContent = callDeepSeekWithRetry(
+            apiKey = apiKey,
+            messages = messages
+        )
+        return responseParser.parse(rawContent)
+    }
+
+    private suspend fun callDeepSeekWithRetry(
+        apiKey: String,
+        messages: List<DeepSeekMessage>
+    ): String {
+        var lastError: String? = null
+        repeat(DeepSeekConstants.MAX_RETRY + 1) { attempt ->
+            val result = runCatching {
+                val request = DeepSeekRequest(
+                    model = configProvider.getModel(),
+                    messages = messages
+                )
+                val response = deepSeekApi.createChatCompletion(
+                    authorization = "Bearer $apiKey",
+                    request = request
+                )
+                if (!response.isSuccessful) {
+                    error("DeepSeek 请求失败：${response.code()}")
+                }
+
+                val body = response.body() ?: error("DeepSeek 返回为空")
+                body.error?.message?.let { error(it) }
+                body.choices
+                    ?.firstOrNull()
+                    ?.message
+                    ?.content
+                    ?.takeIf { it.isNotBlank() }
+                    ?: error("DeepSeek 未返回有效内容")
+            }
+
+            result.onSuccess { return it }
+            result.onFailure { throwable ->
+                lastError = throwable.message
+                if (attempt < DeepSeekConstants.MAX_RETRY) {
+                    delay(300)
+                }
+            }
+        }
+        error(lastError ?: "DeepSeek 服务暂时不可用")
+    }
+
+    private fun fallbackLocalResponse(message: String, locationContext: String?): String {
         return when {
-            message.contains("怎么走") || message.contains("路线") ->
-                "从您的当前位置出发，沿着主路向东走约200米，在第二个路口左转即可到达。"
+            isWeatherQuery(message) -> buildWeatherFallbackResponse()
 
-            message.contains("开放") || message.contains("时间") ->
-                "该地点的开放时间是：周一至周五 8:00-18:00，周末 9:00-17:00。"
+            message.contains("下一节课") || message.contains("去上课") || message.contains("上课") ->
+                "AI 服务尚未配置 DeepSeek API Key。请先配置后再使用课表智能导航；如果你已经知道教室，也可以直接搜索目标地点。"
 
-            message.contains("好吃") || message.contains("美食") ->
-                "附近有很多美食选择，推荐您尝试学校食堂二楼的麻辣香锅，或者后门的小吃一条街。"
+            message.contains("怎么走") || message.contains("路线") || message.contains("导航") ->
+                "AI 服务尚未配置 DeepSeek API Key。你可以先使用地图搜索目标地点进行导航。"
 
             locationContext != null ->
-                "关于这个地点：$locationContext。如果您有其他问题，欢迎继续问我！"
+                "AI 服务尚未配置 DeepSeek API Key。当前地点上下文：$locationContext。"
 
             else ->
-                "您好！我是您的校园导航助手。我可以帮您：\n" +
-                "• 解答地点相关问题\n" +
-                "• 提供路线指引\n" +
-                "• 介绍校园设施\n\n" +
-                "请问有什么可以帮到您？"
+                "你好，我是 GUET Map 校园 AI 助手。当前 DeepSeek API Key 未配置，暂时只能提供基础提示。"
+        }
+    }
+
+    private fun isWeatherQuery(message: String): Boolean {
+        val weatherKeywords = listOf(
+            "天气", "气温", "温度", "下雨", "下雪", "刮风",
+            "紫外线", "空气质量", "AQI", "pm2.5", "穿衣",
+            "要不要带伞", "热不热", "冷不冷", "适合出门吗"
+        )
+        return weatherKeywords.any { keyword -> message.contains(keyword) }
+    }
+
+    private fun buildWeatherFallbackResponse(): String {
+        return try {
+            runBlocking {
+                when (val result = weatherRepository.getWeather()) {
+                    is com.example.guet_map.model.Resource.Success -> {
+                        val weather = result.data
+                        buildString {
+                            appendLine("📍 桂林电子科技大学今日天气")
+                            appendLine("━━━━━━━━━━━━━━━━")
+                            appendLine("🌤️ ${weather.description}")
+                            appendLine("🌡️ 气温：${weather.temperature}°C（体感 ${weather.feelsLike}°C）")
+                            appendLine("💧 湿度：${weather.humidity}%")
+                            appendLine("🌬️ 风力：${weather.windDirection} ${weather.windSpeed}级")
+                            if (!weather.aqiLevel.isNullOrEmpty()) {
+                                appendLine("🌿 空气质量：${weather.aqiLevel}（AQI ${weather.aqi}）")
+                            }
+                            weather.uvIndex?.let { appendLine("☀️ 紫外线指数：$it") }
+                            weather.alertMessage?.let { appendLine("⚠️ $it") }
+
+                            val tips = fetchWeatherSafetyUseCase.invoke(0.0, 0.0)
+                            if (tips.isNotEmpty()) {
+                                appendLine()
+                                appendLine("💡 $tips")
+                            }
+                        }
+                    }
+                    is com.example.guet_map.model.Resource.Error -> {
+                        "抱歉，暂时无法获取天气信息，请稍后再试。"
+                    }
+                    is com.example.guet_map.model.Resource.Loading -> {
+                        "正在获取天气信息..."
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            "抱歉，AI 服务尚未配置，无法回答天气相关问题。"
         }
     }
 }
