@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentWeatherBinding
 import com.example.guet_map.module.social.data.model.WeatherType
 import dagger.hilt.android.AndroidEntryPoint
@@ -25,6 +26,7 @@ class WeatherFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: WeatherViewModel by viewModels()
+    private lateinit var hourlyAdapter: HourlyForecastAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -38,7 +40,13 @@ class WeatherFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupSwipeRefresh()
+        setupHourlyForecast()
         observeState()
+    }
+
+    private fun setupHourlyForecast() {
+        hourlyAdapter = HourlyForecastAdapter()
+        binding.rvHourlyForecast.adapter = hourlyAdapter
     }
 
     private fun setupSwipeRefresh() {
@@ -99,14 +107,40 @@ class WeatherFragment : Fragment() {
                 textViewUvIndex.text = "紫外线 $uv"
             }
 
-            // 根据天气类型设置图标
+            // 极端天气预警
+            val alert = weather.alertMessage
+            if (!alert.isNullOrBlank()) {
+                tvAlertMessage.text = alert
+                tvAlertMessage.visibility = View.VISIBLE
+            } else {
+                tvAlertMessage.visibility = View.GONE
+            }
+
+            // 天气图标
             val iconRes = when (weather.weatherType) {
-                WeatherType.SUNNY -> android.R.drawable.btn_star_big_on
-                WeatherType.CLOUDY -> android.R.drawable.btn_star_big_off
-                WeatherType.LIGHT_RAIN -> android.R.drawable.presence_away
-                else -> android.R.drawable.ic_menu_day
+                WeatherType.SUNNY -> R.drawable.ic_weather_sunny
+                WeatherType.CLOUDY -> R.drawable.ic_weather_cloudy
+                WeatherType.OVERCAST -> R.drawable.ic_weather_overcast
+                WeatherType.LIGHT_RAIN -> R.drawable.ic_weather_light_rain
+                WeatherType.MODERATE_RAIN -> R.drawable.ic_weather_moderate_rain
+                WeatherType.HEAVY_RAIN -> R.drawable.ic_weather_moderate_rain
+                WeatherType.THUNDERSTORM -> R.drawable.ic_weather_thunderstorm
+                WeatherType.SNOW -> R.drawable.ic_weather_snow
+                WeatherType.FOG -> R.drawable.ic_weather_fog
+                WeatherType.WINDY -> R.drawable.ic_weather_windy
+                WeatherType.UNKNOWN -> R.drawable.ic_weather_unknown
             }
             imageViewWeatherIcon.setImageResource(iconRes)
+
+            // 小时预报
+            if (weather.hourlyForecast.isNotEmpty()) {
+                rvHourlyForecast.visibility = View.VISIBLE
+                tvHourlyTitle.visibility = View.VISIBLE
+                hourlyAdapter.submitList(weather.hourlyForecast)
+            } else {
+                rvHourlyForecast.visibility = View.GONE
+                tvHourlyTitle.visibility = View.GONE
+            }
         }
     }
 

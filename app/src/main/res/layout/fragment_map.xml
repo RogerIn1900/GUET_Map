@@ -20,9 +20,9 @@
     </FrameLayout>
 
     <!-- Weather / safety banner -->
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardWeatherSafety"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
@@ -30,15 +30,55 @@
         app:cardCornerRadius="16dp"
         app:cardElevation="4dp">
 
-        <TextView
-            android:id="@+id/tvWeatherSafety"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="12dp"
-            android:text="天气与安全提示"
-            android:textSize="13sp"
-            android:textColor="?attr/colorOnSurface" />
-    </androidx.cardview.widget.CardView>
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp">
+
+            <ImageView
+                android:id="@+id/ivBannerWeatherIcon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="天气图标"
+                android:src="@drawable/ic_weather_sunny" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvBannerTemp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--°"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvWeatherSafety"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="天气与安全提示"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/pbBannerWeather"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Floating search bar -->
     <androidx.cardview.widget.CardView

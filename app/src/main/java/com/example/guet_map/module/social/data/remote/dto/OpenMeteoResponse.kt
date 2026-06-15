@@ -78,23 +78,27 @@ fun OpenMeteoResponse.toDomain(): Weather {
     val sunset = dailyData?.sunset?.firstOrNull()?.let { parseIsoTime(it) } ?: System.currentTimeMillis()
     val uvIndex = dailyData?.uv_index_max?.firstOrNull()?.toInt() ?: 0
 
-    return Weather(
-        id = UUID.randomUUID().toString(),
-        temperature = currentWeather?.temperature_2m?.toInt() ?: 0,
-        feelsLike = currentWeather?.apparent_temperature?.toInt() ?: 0,
-        humidity = currentWeather?.relative_humidity_2m ?: 0,
-        windSpeed = currentWeather?.wind_speed_10m?.toFloat() ?: 0f,
-        windDirection = getWindDirection(currentWeather?.wind_direction_10m ?: 0),
-        weatherType = mapWeatherCode(currentWeather?.weather_code ?: 0),
-        description = getWeatherDescription(currentWeather?.weather_code ?: 0),
-        aqi = null,  // Open-Meteo 基础版不含 AQI
-        aqiLevel = null,
-        uvIndex = uvIndex,
-        sunrise = sunrise,
-        sunset = sunset,
-        hourlyForecast = hourlyForecast,
-        alertMessage = null
-    )
+        val weatherCode = currentWeather?.weather_code ?: 0
+        val temp = currentWeather?.temperature_2m ?: 0.0
+        val precipProb = hourlyData?.precipitation_probability?.firstOrNull() ?: 0
+
+        return Weather(
+            id = UUID.randomUUID().toString(),
+            temperature = currentWeather?.temperature_2m?.toInt() ?: 0,
+            feelsLike = currentWeather?.apparent_temperature?.toInt() ?: 0,
+            humidity = currentWeather?.relative_humidity_2m ?: 0,
+            windSpeed = currentWeather?.wind_speed_10m?.toFloat() ?: 0f,
+            windDirection = getWindDirection(currentWeather?.wind_direction_10m ?: 0),
+            weatherType = mapWeatherCode(weatherCode),
+            description = getWeatherDescription(weatherCode),
+            aqi = null,  // Open-Meteo 基础版不含 AQI
+            aqiLevel = null,
+            uvIndex = uvIndex,
+            sunrise = sunrise,
+            sunset = sunset,
+            hourlyForecast = hourlyForecast,
+            alertMessage = buildAlertMessage(weatherCode, temp, precipProb)
+        )
 }
 
 /**
@@ -169,4 +173,47 @@ private fun parseIsoTime(isoString: String): Long {
     } catch (e: Exception) {
         System.currentTimeMillis()
     }
+}
+
+/**
+ * 根据天气码、温度、降水概率生成安全提示
+ * 覆盖 WX-03 极端天气预警功能
+ */
+private fun buildAlertMessage(weatherCode: Int, temp: Double, precipProb: Int): String? {
+    val alerts = mutableListOf<String>()
+
+    // 雷暴 / 暴雨
+    if (weatherCode in listOf(95, 96, 99)) {
+        alerts.add("雷暴天气，请避免户外活动，注意防雷击")
+    } else if (weatherCode == 82) {
+        alerts.add("暴雨来袭，请注意防范洪涝灾害")
+    }
+
+    // 大雨 / 中雨
+    if (weatherCode in listOf(61, 63, 65, 80, 81)) {
+        alerts.add("有降水天气，路面湿滑，请小心慢行")
+    }
+
+    // 低温预警 (低于 5°C)
+    if (temp < 5) {
+        alerts.add("气温较低（${temp.toInt()}°C），请注意保暖与防滑")
+    }
+
+    // 高温预警 (高于 35°C)
+    if (temp > 35) {
+        alerts.add("高温预警（${temp.toInt()}°C），请注意防暑降温")
+    }
+
+    // 大风 (风速 > 10 m/s，对应 6 级以上风)
+    // 注意：当前数据中没有直接的风速，这里用天气码辅助判断
+    if (weatherCode == 95 || weatherCode == 96 || weatherCode == 99) {
+        alerts.add("强对流天气，请注意防范大风")
+    }
+
+    // 雾天
+    if (weatherCode in listOf(45, 48)) {
+        alerts.add("有雾天气，能见度低，请注意出行安全")
+    }
+
+    return alerts.takeIf { it.isNotEmpty() }?.joinToString("；")
 }

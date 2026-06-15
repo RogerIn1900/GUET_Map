@@ -63,4 +63,5 @@
     <string name="weather_rain_warning">今天有降雨，路面湿滑，请小心慢行</string>
     <string name="weather_cold_warning">气温较低，请注意保暖与防滑</string>
     <string name="weather_unknown">天气数据暂不可用</string>
+    <string name="weather_hourly_title">小时预报</string>
 </resources>

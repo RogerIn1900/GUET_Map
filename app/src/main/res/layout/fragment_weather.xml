@@ -122,9 +122,41 @@
                     android:layout_height="wrap_content"
                     android:text="紫外线 6" />
 
-            </LinearLayout>
-
         </LinearLayout>
+
+        <!-- 天气预警 -->
+        <TextView
+            android:id="@+id/tvAlertMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_weather_alert"
+            android:padding="10dp"
+            android:textColor="#B71C1C"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- 小时预报 -->
+        <TextView
+            android:id="@+id/tvHourlyTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="小时预报"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvHourlyForecast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+    </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
