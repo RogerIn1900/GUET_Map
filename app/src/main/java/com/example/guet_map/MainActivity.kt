@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
         if (intent.getBooleanExtra("open_ai_chat", false)) {
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    mainNavViewModel.requestTab(R.id.nav_chat)
+                    mainNavViewModel.requestTab(R.id.nav_notifications)
                 }
             }
         }

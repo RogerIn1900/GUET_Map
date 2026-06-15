@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bubbleView"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:background="@drawable/ic_chat"
+    android:contentDescription="AI 助手">
+
+    <TextView
+        android:id="@+id/tvUnreadBadge"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_gravity="top|end"
+        android:background="#FF0000"
+        android:gravity="center"
+        android:text="0"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+</FrameLayout>
