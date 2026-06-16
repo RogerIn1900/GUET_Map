@@ -5,8 +5,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.guet_map.data.UserPrefs
-import com.example.guet_map.local.dao.GuideStepDao
-import com.example.guet_map.local.entity.GuideStepEntity
+import com.example.guet_map.core.dao.GuideStepDao
+import com.example.guet_map.core.entity.GuideStepEntity
 import com.example.guet_map.model.Location
 import com.example.guet_map.model.MyGuideSubmission
 import com.example.guet_map.model.Resource

@@ -27,6 +27,7 @@
     <color name="background">#FFFFFFFF</color>
     <color name="surface">#FFFFFFFF</color>
     <color name="search_bg">#FFF5F5F5</color>
+    <color name="divider">#FFE0E0E0</color>
 
     <!-- 评分 -->
     <color name="rating_star">#FFFFC107</color>

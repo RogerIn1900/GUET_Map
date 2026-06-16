@@ -15,8 +15,28 @@ import androidx.room.Entity
 data class LegacyFavoriteEntity(
     @ColumnInfo(name = "user_id")
     val userId: String,
+
     @ColumnInfo(name = "location_id")
     val locationId: String,
+
+    @ColumnInfo(name = "name")
+    val name: String = "",
+
+    @ColumnInfo(name = "latitude")
+    val latitude: Double = 0.0,
+
+    @ColumnInfo(name = "longitude")
+    val longitude: Double = 0.0,
+
+    @ColumnInfo(name = "category")
+    val category: String = "",
+
+    @ColumnInfo(name = "rating")
+    val rating: Float = 0f,
+
+    @ColumnInfo(name = "image_url")
+    val imageUrl: String = "",
+
     @ColumnInfo(name = "added_at")
     val addedAt: Long = System.currentTimeMillis()
 )

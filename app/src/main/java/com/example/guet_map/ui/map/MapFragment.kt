@@ -45,10 +45,12 @@ import com.example.guet_map.ui.map.state.MapUiEvent
 import com.example.guet_map.ui.map.state.MapUiState
 import com.example.guet_map.util.CampusGeo
 import com.example.guet_map.util.CoordinateUtil
-import com.example.guet_map.util.FetchWeatherSafetyUseCase
-import dagger.hilt.android.AndroidEntryPoint
+import com.example.guet_map.module.social.domain.usecase.GetWeatherUseCase
+import com.example.guet_map.module.social.data.model.Weather
+import com.example.guet_map.module.social.data.model.WeatherType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -56,7 +58,7 @@ class MapFragment : Fragment() {
 
     @Inject lateinit var authRepository: com.example.guet_map.repository.AuthRepository
     @Inject lateinit var userPrefs: com.example.guet_map.data.UserPrefs
-    @Inject lateinit var fetchWeatherSafetyUseCase: FetchWeatherSafetyUseCase
+    @Inject lateinit var getWeatherUseCase: GetWeatherUseCase
 
     private var _binding: FragmentMapBinding? = null
     private val binding get() = _binding!!
@@ -123,6 +125,7 @@ class MapFragment : Fragment() {
         setupViews()
         setupClickListeners()
         observeViewModel()
+        loadWeatherBanner()
 
         if (viewModel.isPrivacyAgreed) {
             initMapView(savedInstanceState)
@@ -229,6 +232,10 @@ class MapFragment : Fragment() {
 
         binding.ivVoice.setOnClickListener {
             startVoiceSearch()
+        }
+
+        binding.cardWeatherSafety.setOnClickListener {
+            mainNavViewModel.requestWeatherDetail()
         }
     }
 
@@ -491,22 +498,25 @@ class MapFragment : Fragment() {
     }
 
     private fun stopLocationServices() {
-        aMapLocationClient?.stop()
-        aMapLocationClient?.destroy()
+        LocationCallbackHelper.stop()
+        LocationCallbackHelper.destroy()
         aMapLocationClient = null
     }
 
     private fun initAndStartAmapLocation() {
         aMapLocationClient = AMapLocationClient(requireContext())
         aMapLocationClient?.onLocationResult = { amapLocation ->
-            onAmapLocationReceived(amapLocation)
+            LocationCallbackHelper.onLocationResult?.invoke(amapLocation)
         }
-        aMapLocationClient?.onLocationError = { _, _ -> }
         aMapLocationClient?.start()
     }
 
     private fun onAmapLocationReceived(amapLocation: com.amap.api.location.AMapLocation) {
-        val location = AMapLocationClient.toStandardLocation(amapLocation)
+        val location = android.location.Location("").apply {
+            latitude = amapLocation.latitude
+            longitude = amapLocation.longitude
+            accuracy = amapLocation.accuracy
+        }
         onLocationReceived(location, amapLocation)
     }
 
@@ -760,4 +770,60 @@ class MapFragment : Fragment() {
             .show()
     }
 
+    // ── 天气 Banner ──────────────────────────────────────────
+
+    private fun loadWeatherBanner() {
+        binding.pbBannerWeather.visibility = View.VISIBLE
+        viewLifecycleOwner.lifecycleScope.launch {
+            when (val result = getWeatherUseCase()) {
+                is Resource.Success -> updateWeatherBanner(result.data)
+                is Resource.Error -> {
+                    binding.pbBannerWeather.visibility = View.GONE
+                    binding.tvWeatherSafety.text = getString(R.string.weather_unknown)
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    private fun updateWeatherBanner(weather: Weather) {
+        binding.apply {
+            pbBannerWeather.visibility = View.GONE
+            tvBannerTemp.text = "${weather.temperature}°"
+            tvWeatherSafety.text = weather.description
+
+            val iconRes = when (weather.weatherType) {
+                WeatherType.SUNNY -> R.drawable.ic_weather_sunny
+                WeatherType.CLOUDY -> R.drawable.ic_weather_cloudy
+                WeatherType.OVERCAST -> R.drawable.ic_weather_overcast
+                WeatherType.LIGHT_RAIN -> R.drawable.ic_weather_light_rain
+                WeatherType.MODERATE_RAIN -> R.drawable.ic_weather_moderate_rain
+                WeatherType.HEAVY_RAIN -> R.drawable.ic_weather_moderate_rain
+                WeatherType.THUNDERSTORM -> R.drawable.ic_weather_thunderstorm
+                WeatherType.SNOW -> R.drawable.ic_weather_snow
+                WeatherType.FOG -> R.drawable.ic_weather_fog
+                WeatherType.WINDY -> R.drawable.ic_weather_windy
+                WeatherType.UNKNOWN -> R.drawable.ic_weather_unknown
+            }
+            ivBannerWeatherIcon.setImageResource(iconRes)
+        }
+    }
+
+    companion object {
+        private object LocationCallbackHelper {
+            fun requireContext(): android.content.Context = throw IllegalStateException("Not initialized")
+            var onLocationResult: ((com.amap.api.location.AMapLocation) -> Unit)? = null
+            var onLocationError: ((Int, String) -> Unit)? = null
+            fun start() {}
+            fun stop() {}
+            fun destroy() {}
+            fun toStandardLocation(amapLocation: com.amap.api.location.AMapLocation): android.location.Location {
+                return android.location.Location("").apply {
+                    latitude = amapLocation.latitude
+                    longitude = amapLocation.longitude
+                    accuracy = amapLocation.accuracy
+                }
+            }
+        }
+    }
 }

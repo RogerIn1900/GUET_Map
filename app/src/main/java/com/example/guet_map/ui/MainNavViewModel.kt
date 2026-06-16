@@ -54,6 +54,20 @@ class MainNavViewModel @Inject constructor() : ViewModel() {
         _selectedTab.value = tabId
     }
 
+    private val _pendingWeatherDetail = MutableStateFlow(false)
+    val pendingWeatherDetail: StateFlow<Boolean> = _pendingWeatherDetail.asStateFlow()
+
+    fun requestWeatherDetail() {
+        _selectedTab.value = R.id.nav_map
+        _pendingWeatherDetail.value = true
+    }
+
+    fun consumeWeatherDetailRequest(): Boolean {
+        val pending = _pendingWeatherDetail.value
+        _pendingWeatherDetail.value = false
+        return pending
+    }
+
     fun consumeTabRequest(): Int? {
         val tab = _selectedTab.value
         _selectedTab.value = null

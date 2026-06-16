@@ -11,8 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- 高德地图 MapView -->
-        <com.amap.api.maps.MapView
+        <!-- 高德地图 TextureMapView (TextureView 实现，规避 GLSurfaceView 在部分设备的 EGL 崩溃) -->
+        <com.amap.api.maps.TextureMapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
@@ -20,9 +20,9 @@
     </FrameLayout>
 
     <!-- Weather / safety banner -->
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/cardWeatherSafety"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
@@ -30,15 +30,55 @@
         app:cardCornerRadius="16dp"
         app:cardElevation="4dp">
 
-        <TextView
-            android:id="@+id/tvWeatherSafety"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="12dp"
-            android:text="天气与安全提示"
-            android:textSize="13sp"
-            android:textColor="?attr/colorOnSurface" />
-    </androidx.cardview.widget.CardView>
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp">
+
+            <ImageView
+                android:id="@+id/ivBannerWeatherIcon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:contentDescription="天气图标"
+                android:src="@drawable/ic_weather_sunny" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvBannerTemp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--°"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvWeatherSafety"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="天气与安全提示"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/pbBannerWeather"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Floating search bar -->
     <androidx.cardview.widget.CardView
@@ -132,23 +172,7 @@
         android:orientation="horizontal"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-    <!-- AI 对话按钮 -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabAiChat"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="end|bottom"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="140dp"
-        android:contentDescription="AI 对话"
-        app:fabCustomSize="48dp"
-        app:srcCompat="@drawable/ic_chat"
-        app:backgroundTint="?attr/colorSurface"
-        app:tint="@color/primary"
-        app:borderWidth="0dp"
-        app:elevation="4dp" />
-
-    <!-- 我的位置按钮 -->
+    <!-- AI 助手按钮 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabMyLocation"
         android:layout_width="48dp"
@@ -159,6 +183,22 @@
         android:contentDescription="我的位置"
         app:fabCustomSize="48dp"
         app:srcCompat="@drawable/ic_my_location"
+        app:backgroundTint="?attr/colorSurface"
+        app:tint="@color/primary"
+        app:borderWidth="0dp"
+        app:elevation="4dp" />
+
+    <!-- AI 助手按钮 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAiChat"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="144dp"
+        android:contentDescription="AI 助手"
+        app:fabCustomSize="48dp"
+        app:srcCompat="@drawable/ic_chat"
         app:backgroundTint="?attr/colorSurface"
         app:tint="@color/primary"
         app:borderWidth="0dp"

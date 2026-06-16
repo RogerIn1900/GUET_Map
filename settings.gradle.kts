@@ -1,4 +1,7 @@
 pluginManagement {
+    // 加载跨平台检测脚本
+    apply(from = "gradle-detect-platform.gradle.kts")
+
     repositories {
         // 官方源优先
         google()
@@ -21,6 +24,9 @@ dependencyResolutionManagement {
         // 高德 SDK（3dmap / search）
         maven { url = uri("https://maven.aliyun.com/repository/public") }
         maven { url = uri("https://a.amap.com/lbs/static/unzip/AndroidMapSDK/android_studio/") }
+
+        // MPAndroidChart
+        maven { url = uri("https://jitpack.io") }
 
     }
 }

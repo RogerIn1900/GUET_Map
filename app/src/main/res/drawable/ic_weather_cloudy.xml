@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Cloud -->
+    <path
+        android:fillColor="#90A4AE"
+        android:pathData="M38,32H14a6,6 0,0 1,0 -12,7 7,0 0,1 14,0,5 5,0 0,1 0,10h6" />
+    <!-- Sun peeking -->
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M16,16m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+</vector>

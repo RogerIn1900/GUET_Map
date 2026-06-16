@@ -63,4 +63,13 @@
     <string name="weather_rain_warning">今天有降雨，路面湿滑，请小心慢行</string>
     <string name="weather_cold_warning">气温较低，请注意保暖与防滑</string>
     <string name="weather_unknown">天气数据暂不可用</string>
+    <string name="weather_hourly_title">小时预报</string>
+    <string name="weather_detail_title">天气预报</string>
+    <string name="weather_16day_title">16 天预报</string>
+    <string name="weather_location_switch">切换地点</string>
+    <string name="location_select_title">选择地点</string>
+    <string name="location_custom_hint">地点名称</string>
+    <string name="location_lat_hint">纬度</string>
+    <string name="location_lng_hint">经度</string>
+    <string name="location_confirm_custom">查询此地天气</string>
 </resources>
