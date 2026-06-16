@@ -48,8 +48,18 @@ class GUETMapApplication : Application() {
 
         // 设置默认异常处理器，捕获未处理异常
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        val ctx = applicationContext
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            android.util.Log.e("GUETMapApp", "UNCAUGHT EXCEPTION on thread ${thread.name}", throwable)
+            try {
+                val sw = java.io.StringWriter()
+                throwable.printStackTrace(java.io.PrintWriter(sw))
+                val stack = sw.toString()
+                android.util.Log.e("GUETMapApp", "UNCAUGHT EXCEPTION on thread ${thread.name}\n$stack")
+                // 写到 filesDir，下次崩溃可读
+                val f = java.io.File(ctx.filesDir, "last_crash.log")
+                f.writeText("thread=${thread.name} time=${System.currentTimeMillis()}\n$stack\n")
+            } catch (_: Exception) {
+            }
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }

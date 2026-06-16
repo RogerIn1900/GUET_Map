@@ -11,8 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- 高德地图 MapView -->
-        <com.amap.api.maps.MapView
+        <!-- 高德地图 TextureMapView (TextureView 实现，规避 GLSurfaceView 在部分设备的 EGL 崩溃) -->
+        <com.amap.api.maps.TextureMapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
