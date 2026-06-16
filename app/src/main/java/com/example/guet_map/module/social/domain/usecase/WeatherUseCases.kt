@@ -7,16 +7,11 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 /**
- * 获取天气用例
+ * 获取天气用例（当前 + 24h 预报）
  */
 class GetWeatherUseCase @Inject constructor(
     private val weatherRepository: WeatherRepository
 ) {
-    /**
-     * 获取天气
-     * @param latitude 纬度，默认桂林电子科技大学
-     * @param longitude 经度，默认桂林电子科技大学
-     */
     suspend operator fun invoke(
         latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
         longitude: Double = WeatherRepository.DEFAULT_LONGITUDE
@@ -24,16 +19,13 @@ class GetWeatherUseCase @Inject constructor(
         return weatherRepository.getWeather(latitude, longitude)
     }
 
-    /**
-     * 观察天气变化（Flow）
-     */
     fun observe(): Flow<com.example.guet_map.module.social.data.model.Weather?> {
         return weatherRepository.observeWeather()
     }
 }
 
 /**
- * 获取完整天气预报（含16天日报）
+ * 获取完整天气预报（当前 + 16 天预报 + 逐小时）
  */
 class GetWeatherForecastUseCase @Inject constructor(
     private val weatherRepository: WeatherRepository
@@ -53,11 +45,6 @@ class GetWeatherForecastUseCase @Inject constructor(
 class RefreshWeatherUseCase @Inject constructor(
     private val weatherRepository: WeatherRepository
 ) {
-    /**
-     * 强制刷新天气
-     * @param latitude 纬度
-     * @param longitude 经度
-     */
     suspend operator fun invoke(
         latitude: Double = WeatherRepository.DEFAULT_LATITUDE,
         longitude: Double = WeatherRepository.DEFAULT_LONGITUDE

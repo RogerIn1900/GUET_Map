@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 天气半透明色（亮色模式） -->
+    <color name="weather_today_bg">#1A2196F3</color>
+    <color name="weather_today_stroke">#332196F3</color>
+    <color name="weather_row_highlight">#0D2196F3</color>
+</resources>

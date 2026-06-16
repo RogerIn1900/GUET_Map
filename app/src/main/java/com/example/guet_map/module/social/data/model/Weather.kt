@@ -42,8 +42,16 @@ enum class WeatherType(val icon: String, val description: String) {
  * 小时天气预报
  */
 data class HourlyWeather(
-    val hour: Int,          // 小时 (0-23)
+    val hour: Int,                     // 小时 (0-23)
+    val dayIndex: Int = 0,             // 距今天数：0=今天，1=明天，2=后天…
     val temperature: Int,
     val weatherType: WeatherType,
-    val precipitation: Int   // 降水概率 %
+    val precipitation: Int,            // 降水概率 %
+    val precipitationAmount: Float = 0f, // 降水量 mm
+    val feelsLike: Int = temperature,   // 体感
+    val windDirection: String = "",    // 风向（西南/东北…）
+    val windSpeed: Float = 0f,         // 风速 m/s
+    val windLevel: String = "",        // 风力等级（1-2级）
+    val humidity: Int = 0,             // 湿度
+    val pressure: Int = 0              // 气压 hPa
 )

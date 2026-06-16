@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 基础颜色 -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- 主题色 -->
+    <color name="primary">#FFBB86FC</color>
+    <color name="primary_dark">#FF3700B3</color>
+    <color name="primary_light">#FF6200EE</color>
+
+    <!-- 导航栏 -->
+    <color name="nav_icon_selected">#FFBB86FC</color>
+    <color name="nav_icon">#FF888888</color>
+
+    <!-- 文本颜色 -->
+    <color name="text_primary">#FFE0E0E0</color>
+    <color name="text_secondary">#FFB0B0B0</color>
+    <color name="text_hint">#FF707070</color>
+
+    <!-- 背景色 -->
+    <color name="background">#FF121212</color>
+    <color name="surface">#FF1E1E1E</color>
+    <color name="search_bg">#FF2C2C2C</color>
+    <color name="divider">#FF3A3A3A</color>
+
+    <!-- 评分 -->
+    <color name="rating_star">#FFFFC107</color>
+
+    <!-- 路线导航 -->
+    <color name="step_circle">#FFBB86FC</color>
+    <color name="step_line">#FF444444</color>
+
+    <!-- 状态色 -->
+    <color name="success">#FF66BB6A</color>
+    <color name="warning">#FFFFC107</color>
+    <color name="error">#FFEF5350</color>
+    <color name="info">#FF64B5F6</color>
+
+    <!-- 天气半透明色（暗色模式） -->
+    <color name="weather_today_bg">#1DFFFFFF</color>
+    <color name="weather_today_stroke">#33FFFFFF</color>
+    <color name="weather_row_highlight">#1AFFFFFF</color>
+</resources>

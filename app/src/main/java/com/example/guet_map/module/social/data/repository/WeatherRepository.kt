@@ -5,10 +5,9 @@ import com.example.guet_map.module.social.data.local.dao.WeatherDao
 import com.example.guet_map.module.social.data.local.entity.WeatherEntity
 import com.example.guet_map.module.social.data.model.Weather
 import com.example.guet_map.module.social.data.model.WeatherForecast
-import com.example.guet_map.module.social.data.remote.AmapWeatherApiService
-import com.example.guet_map.module.social.data.remote.CityAdcodeResolver
+import com.example.guet_map.module.social.data.remote.OpenMeteoApiService
 import com.example.guet_map.module.social.data.remote.dto.toDailyForecast
-import com.example.guet_map.module.social.data.remote.dto.toDomain
+import com.example.guet_map.module.social.data.remote.dto.toWeather
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -20,30 +19,25 @@ import javax.inject.Singleton
 /**
  * 天气数据仓库
  *
- * 使用高德（AMap）Web 天气 API，国内直连稳定。
- * 策略：缓存优先（30 分钟有效） + 网络拉新 + 失败回退到缓存。
+ * 使用 Open-Meteo（免费，无 key），按经纬度直接查询：
+ * - 一次 `/v1/forecast` 同时拿 current + hourly(168h) + daily(16d)
+ * - 缓存在 Room，30 分钟有效
  */
 @Singleton
 class WeatherRepository @Inject constructor(
     private val weatherDao: WeatherDao,
-    private val amapWeatherApi: AmapWeatherApiService,
-    private val cityAdcodeResolver: CityAdcodeResolver,
+    private val openMeteoApi: OpenMeteoApiService,
     private val gson: Gson
 ) {
 
-    /**
-     * 观察天气变化（从数据库）
-     */
+    /** 观察天气变化（从数据库） */
     fun observeWeather(): Flow<Weather?> {
         return weatherDao.observeLatestWeather().map { entity ->
             entity?.toDomain()
         }
     }
 
-    /**
-     * 获取天气
-     * 策略：缓存有效则直接返回，否则请求 API
-     */
+    /** 缓存优先 + 失败回退 */
     suspend fun getWeather(
         latitude: Double = DEFAULT_LATITUDE,
         longitude: Double = DEFAULT_LONGITUDE
@@ -66,9 +60,7 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    /**
-     * 强制刷新天气
-     */
+    /** 强制刷新 */
     suspend fun refreshWeather(
         latitude: Double = DEFAULT_LATITUDE,
         longitude: Double = DEFAULT_LONGITUDE
@@ -82,28 +74,25 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    /**
-     * 获取完整天气预报（实时 + 4 天预报）
-     */
+    /** 一次请求拿到 current + 16 天预报（详情页用） */
     suspend fun getWeatherForecast(
         latitude: Double = DEFAULT_LATITUDE,
         longitude: Double = DEFAULT_LONGITUDE,
         locationName: String = DEFAULT_LOCATION_NAME
     ): Resource<WeatherForecast> {
         return try {
-            val city = cityAdcodeResolver.resolve(latitude, longitude)
-
-            val liveResp = amapWeatherApi.getLiveWeather(city = city)
-            val weather = liveResp.toDomain()
-                ?: return Resource.Error(liveResp.info ?: "获取天气数据失败")
-
-            val forecastResp = amapWeatherApi.getWeatherForecast(city = city)
-            val dailyForecast = forecastResp.toDailyForecast(
-                fallbackHumidity = weather.humidity,
-                fallbackUv = weather.uvIndex ?: 0
+            val resp = openMeteoApi.getForecast(
+                latitude = latitude,
+                longitude = longitude
             )
+            val weather = resp.toWeather(locationName = locationName)
+                ?: return Resource.Error("天气数据为空")
 
-            // 持久化当前天气
+            val dailyForecast = resp.toDailyForecast(fallbackHumidity = weather.humidity)
+            if (dailyForecast.isEmpty()) {
+                return Resource.Error("预报数据为空")
+            }
+
             weatherDao.insertWeather(weather.toEntity())
 
             Resource.Success(
@@ -122,17 +111,17 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    /**
-     * 从 API 获取天气并缓存
-     */
+    /** 从 API 获取天气并缓存 */
     private suspend fun fetchAndCacheWeather(
         latitude: Double,
         longitude: Double
     ): Resource<Weather> {
-        val city = cityAdcodeResolver.resolve(latitude, longitude)
-        val response = amapWeatherApi.getLiveWeather(city = city)
-        val weather = response.toDomain()
-            ?: return Resource.Error(response.info ?: "获取天气数据失败")
+        val resp = openMeteoApi.getForecast(
+            latitude = latitude,
+            longitude = longitude
+        )
+        val weather = resp.toWeather()
+            ?: return Resource.Error("天气数据为空")
 
         weatherDao.insertWeather(weather.toEntity())
         return Resource.Success(weather)
@@ -187,9 +176,6 @@ class WeatherRepository @Inject constructor(
         const val DEFAULT_LATITUDE = 25.27
         const val DEFAULT_LONGITUDE = 110.29
         const val DEFAULT_LOCATION_NAME = "桂林电子科技大学"
-
-        // 高德天气 adcode：桂林市
-        const val DEFAULT_CITY_ADCODE = "450300"
 
         // 缓存有效期: 30 分钟
         private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L

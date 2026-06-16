@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  吸顶表头（用于 StickyHeaderItemDecoration 自绘）。
+  hourly tab：4 列横排 表头
+  7day/16day tab：日期 / 天气 / 降水 / 高温 / 低温 / UV
+  通过 visible 控制当前 tab 显示哪一组。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface"
+    android:elevation="2dp">
+
+    <!-- 24h 温度小折线（hourly tab 专属） -->
+    <com.example.guet_map.module.social.ui.weather.HourlyMiniChart
+        android:id="@+id/miniChart"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="4dp"
+        android:visibility="gone" />
+
+    <!-- 横向小时表头：时间 / 天气 / 温度+体感 / 风 / 降水 -->
+    <LinearLayout
+        android:id="@+id/llHourlyHeader"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <TextView
+            android:layout_width="56dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:gravity="center"
+            android:text="时间"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:gravity="center"
+            android:text="天气"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="56dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="温度"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="风"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:gravity="end"
+            android:text="降水"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- 纵向日表头 -->
+    <LinearLayout
+        android:id="@+id/llDailyHeader"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1.2"
+            android:gravity="start"
+            android:text="日期"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="天气"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="降水"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:gravity="center"
+            android:text="温度"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="UV"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+</LinearLayout>
