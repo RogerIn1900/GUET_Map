@@ -83,8 +83,13 @@ fun OpenMeteoForecastResponse.toDailyForecast(
 }
 
 /**
- * 提取从"现在"开始的逐小时数据，取到列表末尾。
- * Open-Meteo 一次返回约 7×24=168 条小时数据。
+ * 提取从"今天 0:00"开始的小时数据。
+ *
+ * 关键：
+ * - 起点 = 今日 0:00（而非当前小时）
+ * - 当日（dayIndex=0）= 今日 0:00 ~ 23:00（24 行）
+ * - 0:00 之后（即 next day 0:00 ~ 23:00）属于 dayIndex=1（明天）
+ * - 跨日规则：hour 由非 0 → 0 切换时，dayIndex += 1
  */
 private fun extractHourly(
     hourly: OpenMeteoForecastResponse.Hourly?,
@@ -92,7 +97,10 @@ private fun extractHourly(
 ): List<HourlyWeather> {
     if (hourly == null) return emptyList()
     val time = hourly.time ?: return emptyList()
-    val startIdx = findCurrentHourIndex(time, currentTime)
+    if (time.isEmpty()) return emptyList()
+
+    // 起点 = 今日 0:00（不是当前小时）
+    val startIdx = findTodayZeroHourIndex(time)
     if (startIdx < 0) return emptyList()
 
     return (startIdx until time.size).mapNotNull { i ->
@@ -101,13 +109,48 @@ private fun extractHourly(
         val code = hourly.weatherCode?.getOrNull(i)
         val precip = hourly.precipitationProbability?.getOrNull(i) ?: 0
         val hour = parseHour(t) ?: return@mapNotNull null
+        // 跨日：hour 从非 0 变到 0 时，dayIndex += 1
+        val isDayRollover = i > startIdx && hour == 0
+        val baseDay = (i - startIdx) / 24
+        val dayIndex = if (isDayRollover) baseDay + 1 else baseDay
         HourlyWeather(
             hour = hour,
+            dayIndex = dayIndex,
             temperature = temp,
             weatherType = WmoWeatherCodeMapper.toWeatherType(code),
             precipitation = precip
         )
     }
+}
+
+/**
+ * 找到数组中"今日 0:00"对应的索引。
+ * 时间数组里任何一条 hour=0 且日期 = 今日（或最新过去）的项。
+ */
+private fun findTodayZeroHourIndex(times: List<String>): Int {
+    if (times.isEmpty()) return -1
+    val today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+    val todayYear = Calendar.getInstance().get(Calendar.YEAR)
+    // 优先找今天日期 + 0:00
+    val todayZero = times.indexOfFirst { t ->
+        val d = parseDayOfYear(t) ?: return@indexOfFirst false
+        val h = parseHour(t) ?: return@indexOfFirst false
+        d.first == todayYear && d.second == today && h == 0
+    }
+    if (todayZero >= 0) return todayZero
+    // 兜底：找数组里第一个 hour=0
+    return times.indexOfFirst { parseHour(it) == 0 }.takeIf { it >= 0 } ?: 0
+}
+
+private fun parseDayOfYear(iso: String?): Pair<Int, Int>? {
+    if (iso.isNullOrBlank()) return null
+    val datePart = iso.substringBefore('T', missingDelimiterValue = "")
+    val parts = datePart.split("-")
+    val y = parts.getOrNull(0)?.toIntOrNull() ?: return null
+    val m = parts.getOrNull(1)?.toIntOrNull() ?: return null
+    val d = parts.getOrNull(2)?.toIntOrNull() ?: return null
+    val cal = Calendar.getInstance().apply { set(y, m - 1, d) }
+    return y to cal.get(Calendar.DAY_OF_YEAR)
 }
 
 /**

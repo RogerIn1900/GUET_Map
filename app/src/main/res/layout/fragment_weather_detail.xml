@@ -6,6 +6,7 @@
     android:background="?attr/colorSurface">
 
     <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:elevation="0dp">
@@ -31,6 +32,181 @@
                 app:tint="?attr/colorPrimary" />
 
         </com.google.android.material.appbar.MaterialToolbar>
+
+        <!-- 当前天气卡片：默认在 AppBarLayout 里，会随滚出 -->
+        <LinearLayout
+            android:id="@+id/layoutCurrentWeather"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="8dp"
+            app:layout_scrollFlags="scroll|enterAlwaysCollapsed">
+
+            <TextView
+                android:id="@+id/tvLocationName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="桂林电子科技大学"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="13sp" />
+
+            <ImageView
+                android:id="@+id/ivCurrentWeatherIcon"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_marginTop="8dp"
+                android:contentDescription="天气图标" />
+
+            <TextView
+                android:id="@+id/tvCurrentTemp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--°"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="56sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvCurrentDesc"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvFeelsLike"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="体感 --°"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="14dp"
+                    android:layout_marginHorizontal="12dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/tvHumidity"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="湿度 --%"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="14dp"
+                    android:layout_marginHorizontal="12dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/tvWind"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--风 --m/s"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvUvIndex"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="紫外线 --"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="14dp"
+                    android:layout_marginHorizontal="12dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/tvSunrise"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="日出 --:--"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="14dp"
+                    android:layout_marginHorizontal="12dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/tvSunset"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="日落 --:--"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 预警横幅 -->
+        <TextView
+            android:id="@+id/tvAlertMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_weather_alert"
+            android:padding="10dp"
+            android:textColor="@color/error"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="16dp"
+            android:background="@color/divider" />
+
+        <!-- Tab 标签：吸顶（不滚出） -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="?attr/colorSurface"
+            app:tabGravity="fill"
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabMode="fixed"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabTextColor="?attr/colorOnSurfaceVariant" />
+
+        <!-- 16天温度趋势图：放 AppBarLayout 跟列表滑动联动 -->
+        <com.example.guet_map.module.social.ui.weather.WeatherLineChart
+            android:id="@+id/chartMonthly"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:layout_scrollFlags="scroll|enterAlways" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -39,251 +215,56 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <androidx.core.widget.NestedScrollView
-            android:id="@+id/scrollView"
+        <!-- Tab 内容：3 个独立 RecyclerView，独立滚动 + 自带 sticky header -->
+        <FrameLayout
+            android:id="@+id/tabContent"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:fillViewport="true">
+            android:layout_height="match_parent">
 
-            <LinearLayout
+            <!-- 小时预报 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvHourlyForecast"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingBottom="24dp">
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="32dp"
+                android:paddingBottom="24dp" />
 
-                <!-- 加载状态 -->
-                <ProgressBar
-                    android:id="@+id/progressBar"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="80dp"
-                    android:visibility="gone" />
+            <!-- 7天预报 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvDailyForecast7"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="36dp"
+                android:paddingBottom="24dp"
+                android:visibility="gone" />
 
-                <!-- 当前天气卡片 -->
-                <LinearLayout
-                    android:id="@+id/layoutCurrentWeather"
+            <!-- 16天预报：list（chart 已在 AppBarLayout 里联动滚动） -->
+            <FrameLayout
+                android:id="@+id/layoutMonthly"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvDailyForecast16"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingTop="8dp">
-
-                    <!-- 地点名 -->
-                    <TextView
-                        android:id="@+id/tvLocationName"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="桂林电子科技大学"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
-
-                    <ImageView
-                        android:id="@+id/ivCurrentWeatherIcon"
-                        android:layout_width="72dp"
-                        android:layout_height="72dp"
-                        android:layout_marginTop="8dp"
-                        android:contentDescription="天气图标" />
-
-                    <TextView
-                        android:id="@+id/tvCurrentTemp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="--°"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="56sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tvCurrentDesc"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="--"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="16sp" />
-
-                    <!-- 体感/湿度/风速 -->
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/tvFeelsLike"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="体感 --°"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="14dp"
-                            android:layout_marginHorizontal="12dp"
-                            android:background="@color/divider" />
-
-                        <TextView
-                            android:id="@+id/tvHumidity"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="湿度 --%"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="14dp"
-                            android:layout_marginHorizontal="12dp"
-                            android:background="@color/divider" />
-
-                        <TextView
-                            android:id="@+id/tvWind"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="--风 --m/s"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <!-- 紫外线 / 日出日落 -->
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/tvUvIndex"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="紫外线 --"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="14dp"
-                            android:layout_marginHorizontal="12dp"
-                            android:background="@color/divider" />
-
-                        <TextView
-                            android:id="@+id/tvSunrise"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="日出 --:--"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-
-                        <View
-                            android:layout_width="1dp"
-                            android:layout_height="14dp"
-                            android:layout_marginHorizontal="12dp"
-                            android:background="@color/divider" />
-
-                        <TextView
-                            android:id="@+id/tvSunset"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="日落 --:--"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- 预警横幅 -->
-                <TextView
-                    android:id="@+id/tvAlertMessage"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="16dp"
-                    android:layout_marginTop="12dp"
-                    android:background="@drawable/bg_weather_alert"
-                    android:padding="10dp"
-                    android:textColor="#B71C1C"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-
-                <!-- 分隔线 -->
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@color/divider" />
-
-                <!-- Tab 标签 -->
-                <com.google.android.material.tabs.TabLayout
-                    android:id="@+id/tabLayout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:background="@android:color/transparent"
-                    app:tabGravity="fill"
-                    app:tabIndicatorColor="?attr/colorPrimary"
-                    app:tabMode="fixed"
-                    app:tabSelectedTextColor="?attr/colorPrimary"
-                    app:tabTextColor="?attr/colorOnSurfaceVariant" />
-
-                <!-- Tab 内容容器 -->
-                <FrameLayout
-                    android:id="@+id/tabContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="400dp">
-
-                    <!-- 小时预报 (使用 ViewPager2) -->
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvHourlyForecast"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:clipToPadding="false"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="8dp"
-                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
-
-                    <!-- 7天预报 -->
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvDailyForecast7"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:nestedScrollingEnabled="false"
-                        android:visibility="gone"
-                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
-
-                    <!-- 16天预报 + 图表 -->
-                    <LinearLayout
-                        android:id="@+id/layoutMonthly"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:visibility="gone">
-
-                        <!-- 温度趋势图 -->
-                        <com.example.guet_map.module.social.ui.weather.WeatherLineChart
-                            android:id="@+id/chartMonthly"
-                            android:layout_width="match_parent"
-                            android:layout_height="200dp"
-                            android:layout_marginHorizontal="8dp"
-                            android:layout_marginTop="8dp" />
-
-                        <!-- 16天列表 -->
-                        <androidx.recyclerview.widget.RecyclerView
-                            android:id="@+id/rvDailyForecast16"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:nestedScrollingEnabled="false"
-                            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
-                    </LinearLayout>
-                </FrameLayout>
-            </LinearLayout>
-        </androidx.core.widget.NestedScrollView>
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingTop="36dp"
+                    android:paddingBottom="24dp" />
+            </FrameLayout>
+        </FrameLayout>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- 加载状态 -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
 
     <!-- 错误状态 -->
     <LinearLayout
