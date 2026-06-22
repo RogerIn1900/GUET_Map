@@ -25,7 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sendMessageUseCase: SendMessageUseCase,
-    private val getChatHistoryUseCase: GetChatHistoryUseCase
+    private val getChatHistoryUseCase: GetChatHistoryUseCase,
+    private val userPrefs: com.example.guet_map.data.UserPrefs
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Loading)
@@ -40,8 +41,14 @@ class ChatViewModel @Inject constructor(
     private val _events = MutableSharedFlow<ChatUiEvent>()
     val events: SharedFlow<ChatUiEvent> = _events.asSharedFlow()
 
-    // 对话会话 ID
-    private val sessionId = UUID.randomUUID().toString()
+    private val sessionId: String
+        get() {
+            val stored = userPrefs.chatSessionId
+            if (stored.isNotBlank()) return stored
+            val newId = UUID.randomUUID().toString()
+            userPrefs.chatSessionId = newId
+            return newId
+        }
 
     init {
         loadChatHistory()
@@ -102,6 +109,7 @@ class ChatViewModel @Inject constructor(
             AiAction.ActionType.ASK_PERMISSION -> emitPermissionEvent(action.payload)
             AiAction.ActionType.CLARIFY -> emitClarifyEvent(action.payload)
             AiAction.ActionType.SHOW_WEATHER -> emitWeatherEvent(action.payload)
+            AiAction.ActionType.SHOW_TIMETABLE_NAVIGATION -> emitTimetableNavigationEvent(action.payload)
         }
     }
 
@@ -159,6 +167,25 @@ class ChatViewModel @Inject constructor(
                 uvIndex = payload["uvIndex"]?.toString()?.toIntOrNull(),
                 alertMessage = payload["alertMessage"]?.toString(),
                 safetyTips = payload["safetyTips"]?.toString()
+            )
+        )
+    }
+
+    private suspend fun emitTimetableNavigationEvent(payload: Map<String, Any?>) {
+        _events.emit(
+            ChatUiEvent.ShowTimetableNavigationCard(
+                courseName = payload["courseName"]?.toString() ?: "",
+                classroomName = payload["classroomName"]?.toString() ?: "",
+                dayOfWeek = payload["dayOfWeek"]?.toString() ?: "",
+                formatTime = payload["formatTime"]?.toString() ?: "",
+                departureTime = payload["departureTime"]?.toString() ?: "",
+                arriveTime = payload["arriveTime"]?.toString() ?: "",
+                walkingMinutes = payload["walkingMinutes"]?.toString()?.toIntOrNull() ?: 0,
+                warningMessage = payload["warningMessage"]?.toString() ?: "",
+                timing = payload["timing"]?.toString() ?: "",
+                targetLocationId = payload["targetLocationId"]?.toString(),
+                targetLatitude = payload["targetLatitude"]?.toString()?.toDoubleOrNull(),
+                targetLongitude = payload["targetLongitude"]?.toString()?.toDoubleOrNull()
             )
         )
     }

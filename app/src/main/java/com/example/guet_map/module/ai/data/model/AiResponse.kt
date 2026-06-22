@@ -23,6 +23,7 @@ data class AiAction(
         SHOW_ROUTE,
         ASK_PERMISSION,
         CLARIFY,
-        SHOW_WEATHER
+        SHOW_WEATHER,
+        SHOW_TIMETABLE_NAVIGATION
     }
 }

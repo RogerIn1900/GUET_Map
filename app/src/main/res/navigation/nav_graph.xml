@@ -15,11 +15,6 @@
         android:label="探索" />
 
     <fragment
-        android:id="@+id/nav_favorites"
-        android:name="com.example.guet_map.ui.favorites.FavoritesFragment"
-        android:label="收藏" />
-
-    <fragment
         android:id="@+id/nav_contribute"
         android:name="com.example.guet_map.ui.contribute.ContributeFragment"
         android:label="添加" />
@@ -30,18 +25,78 @@
         android:label="通知" />
 
     <fragment
-        android:id="@+id/nav_notifications"
-        android:name="com.example.guet_map.ui.notifications.NotificationsFragment"
-        android:label="通知" />
+        android:id="@+id/nav_discover"
+        android:name="com.example.guet_map.ui.discover.DiscoverFragment"
+        android:label="发现" />
 
-        <fragment
-            android:id="@+id/nav_login"
-            android:name="com.example.guet_map.ui.login.LoginFragment"
-            android:label="登录" />
+    <fragment
+        android:id="@+id/nav_event_detail"
+        android:name="com.example.guet_map.ui.discover.EventDetailFragment"
+        android:label="活动详情" />
+
+    <fragment
+        android:id="@+id/nav_login"
+        android:name="com.example.guet_map.ui.login.LoginFragment"
+        android:label="登录" />
 
     <fragment
         android:id="@+id/nav_weather_detail"
         android:name="com.example.guet_map.module.social.ui.weather.WeatherDetailFragment"
         android:label="天气预报详情" />
 
+    <fragment
+        android:id="@+id/nav_timetable_import"
+        android:name="com.example.guet_map.module.ai.ui.schedule.TimetableImportFragment"
+        android:label="导入课表" />
+
+    <!-- 个人中心 -->
+    <fragment
+        android:id="@+id/nav_profile"
+        android:name="com.example.guet_map.ui.profile.ProfileFragment"
+        android:label="个人中心" />
+
+    <!-- 好友列表 -->
+    <fragment
+        android:id="@+id/nav_friends"
+        android:name="com.example.guet_map.ui.friends.FriendsFragment"
+        android:label="好友列表" />
+
+    <!-- 添加好友 -->
+    <fragment
+        android:id="@+id/nav_add_friend"
+        android:name="com.example.guet_map.ui.friends.AddFriendFragment"
+        android:label="添加好友" />
+
+    <!-- 聊天 -->
+    <fragment
+        android:id="@+id/nav_chat"
+        android:name="com.example.guet_map.ui.chat.ChatFragment"
+        android:label="聊天">
+        <argument
+            android:name="friendId"
+            app:argType="long"
+            android:defaultValue="0L" />
+        <argument
+            android:name="friendName"
+            app:argType="string"
+            android:defaultValue="" />
+    </fragment>
+
+    <!-- 好友定位 -->
+    <fragment
+        android:id="@+id/nav_friend_location"
+        android:name="com.example.guet_map.ui.friends.FriendLocationFragment"
+        android:label="好友定位" />
+
+    <!-- 好友请求 -->
+    <fragment
+        android:id="@+id/nav_friend_requests"
+        android:name="com.example.guet_map.ui.friends.FriendRequestsFragment"
+        android:label="好友请求" />
+
+    <!-- 我的收藏 -->
+    <fragment
+        android:id="@+id/nav_favorites"
+        android:name="com.example.guet_map.ui.profile.FavoritesFragment"
+        android:label="我的收藏" />
 </navigation>

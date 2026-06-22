@@ -1,6 +1,7 @@
 package com.example.guet_map.ui.notifications
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -31,7 +32,15 @@ class NotificationAdapter(
             binding.tvNotifTitle.text = item.title
             binding.tvNotifBody.text = item.body
             binding.tvNotifTime.text = item.createdAt
-            binding.root.alpha = if (item.isRead) 0.7f else 1f
+
+            if (item.isRead) {
+                binding.root.alpha = 0.6f
+                binding.viewUnreadDot.visibility = View.GONE
+            } else {
+                binding.root.alpha = 1f
+                binding.viewUnreadDot.visibility = View.VISIBLE
+            }
+
             binding.root.setOnClickListener { onClick(item) }
         }
     }

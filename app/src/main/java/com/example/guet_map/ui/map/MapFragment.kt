@@ -222,10 +222,18 @@ class MapFragment : Fragment() {
         }
 
         binding.ivMenu.setOnClickListener {
-            mainNavViewModel.requestTab(R.id.nav_login)
+            if (authRepository.isLoggedIn) {
+                mainNavViewModel.requestTab(R.id.nav_profile)
+            } else {
+                mainNavViewModel.requestTab(R.id.nav_login)
+            }
         }
         binding.ivAvatar.setOnClickListener {
-            mainNavViewModel.requestTab(R.id.nav_login)
+            if (authRepository.isLoggedIn) {
+                mainNavViewModel.requestTab(R.id.nav_profile)
+            } else {
+                mainNavViewModel.requestTab(R.id.nav_login)
+            }
         }
 
         searchBarComponent.setup()
