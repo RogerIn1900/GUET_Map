@@ -26,6 +26,9 @@ class MockInterceptor : Interceptor {
     }
 
     private val favoritesByUser = ConcurrentHashMap<String, MutableList<String>>()
+    private val mockUsers = ConcurrentHashMap<String, MockUser>()
+
+    private data class MockUser(val email: String, val password: String, val nickname: String)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -87,8 +90,18 @@ class MockInterceptor : Interceptor {
     private fun handleLogin(request: okhttp3.Request): String {
         val login = readBody(request, LoginRequest::class.java)
         val email = login?.email?.trim().orEmpty()
-        // Mock: accept any email with a 6-digit code
+        val password = login?.password?.trim().orEmpty()
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
+        }
+        if (password.length < 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码至少6位"))
+        }
         val userId = email.substringBefore("@").ifBlank { "guest" }
+        val mockUser = mockUsers[email.lowercase()]
+        if (mockUser != null && mockUser.password != password) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码错误"))
+        }
         MockSession.activeUserId = userId
         if (!favoritesByUser.containsKey(userId)) {
             favoritesByUser[userId] = defaultFavoriteIdsForUser(userId).toMutableList()
@@ -99,8 +112,9 @@ class MockInterceptor : Interceptor {
         }
         return gson.toJson(
             mapOf(
+                "success" to true,
                 "token" to "mock_token_$userId",
-                "nickname" to userId,
+                "nickname" to (mockUser?.nickname ?: userId),
                 "points" to points,
                 "contributionCount" to 1,
                 "email" to email
@@ -111,12 +125,22 @@ class MockInterceptor : Interceptor {
     private fun handleRegister(request: okhttp3.Request): String {
         val reg = readBody(request, RegisterRequest::class.java)
         val email = reg?.email?.trim().orEmpty()
+        val password = reg?.password?.trim().orEmpty()
         val nickname = reg?.nickname?.trim()?.ifBlank { email.substringBefore("@") } ?: email.substringBefore("@")
         val userId = email.substringBefore("@").ifBlank { "user_${System.currentTimeMillis()}" }
+        if (password.length < 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码至少6位"))
+        }
+        val normalizedEmail = email.lowercase()
+        if (mockUsers.containsKey(normalizedEmail)) {
+            return gson.toJson(mapOf("success" to false, "message" to "该邮箱已注册"))
+        }
+        mockUsers[normalizedEmail] = MockUser(normalizedEmail, password, nickname)
         MockSession.activeUserId = userId
         favoritesByUser[userId] = mutableListOf()
         return gson.toJson(
             mapOf(
+                "success" to true,
                 "token" to "mock_token_$userId",
                 "nickname" to nickname,
                 "points" to 0,

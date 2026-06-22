@@ -86,6 +86,15 @@ class UserRepository {
             }
         }
     }
+
+    fun updatePassword(userId: Long, passwordHash: String) {
+        transaction {
+            Users.update({ Users.id eq userId }) {
+                it[Users.passwordHash] = passwordHash
+                it[Users.updatedAt] = LocalDateTime.now().format(dateFormatter)
+            }
+        }
+    }
     
     fun incrementPoints(userId: Long, amount: Int) {
         transaction {

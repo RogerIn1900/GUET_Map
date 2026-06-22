@@ -41,6 +41,6 @@ interface TimetableEntryDao {
     @Delete
     suspend fun delete(entry: TimetableEntryEntity)
 
-    @Query("DELETE FROM timetable_entries")
-    suspend fun deleteAll()
+    @Query("DELETE FROM timetable_entries WHERE userId = :userId")
+    suspend fun deleteAll(userId: String)
 }

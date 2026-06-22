@@ -20,7 +20,8 @@ data class LoginResponse(
     val nickname: String,
     val email: String,
     val points: Int,
-    val contributionCount: Int = 0
+    val contributionCount: Int = 0,
+    val userId: Long = 0
 )
 
 data class SendCodeRequest(

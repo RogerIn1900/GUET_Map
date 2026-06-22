@@ -72,23 +72,55 @@ fun Route.authRoutes(authService: AuthService, jwtService: JwtService, notificat
     // 登录
     post("/api/v1/auth/login") {
         val request = call.receive<LoginRequest>()
-        
+
         if (request.email.isBlank()) {
             call.respond(HttpStatusCode.BadRequest, errorResponse("邮箱不能为空"))
             return@post
         }
-        
-        if (request.code.isBlank()) {
-            call.respond(HttpStatusCode.BadRequest, errorResponse("验证码不能为空"))
+
+        if (request.password.isBlank()) {
+            call.respond(HttpStatusCode.BadRequest, errorResponse("密码不能为空"))
             return@post
         }
-        
-        val result = authService.login(request.email.trim(), request.code.trim())
-        
+
+        val result = authService.login(request.email.trim(), request.password.trim())
+
         if (result.isSuccess) {
             call.respond(successResponse(result.getOrThrow()))
         } else {
             call.respond(HttpStatusCode.BadRequest, errorResponse(result.exceptionOrNull()?.message ?: "登录失败"))
+        }
+    }
+
+    // 重置密码
+    post("/api/v1/auth/reset-password") {
+        val request = call.receive<ResetPasswordRequest>()
+
+        if (request.email.isBlank()) {
+            call.respond(HttpStatusCode.BadRequest, errorResponse("邮箱不能为空"))
+            return@post
+        }
+
+        if (request.code.isBlank()) {
+            call.respond(HttpStatusCode.BadRequest, errorResponse("验证码不能为空"))
+            return@post
+        }
+
+        if (request.newPassword.isBlank()) {
+            call.respond(HttpStatusCode.BadRequest, errorResponse("新密码不能为空"))
+            return@post
+        }
+
+        val result = authService.resetPassword(
+            request.email.trim(),
+            request.code.trim(),
+            request.newPassword
+        )
+
+        if (result.isSuccess) {
+            call.respond(successResponse())
+        } else {
+            call.respond(HttpStatusCode.BadRequest, errorResponse(result.exceptionOrNull()?.message ?: "重置失败"))
         }
     }
     

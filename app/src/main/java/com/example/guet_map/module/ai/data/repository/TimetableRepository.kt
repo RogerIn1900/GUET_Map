@@ -34,6 +34,8 @@ class TimetableRepository @Inject constructor(
         activeUserId.value = userId.ifBlank { UserPrefs.GUEST_USER_ID }
     }
 
+    val currentUserIdFlow: kotlinx.coroutines.flow.Flow<String> = activeUserId
+
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeEntries(semester: String): Flow<List<TimetableEntry>> {
         return activeUserId.flatMapLatest { uid ->

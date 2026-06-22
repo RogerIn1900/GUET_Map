@@ -99,8 +99,8 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
         val password = binding.etPassword.text?.toString().orEmpty()
 
         if (!validateEmail(email)) return
-        if (password.isBlank()) {
-            binding.tilPassword.error = "请输入密码"
+        if (password.length < 6) {
+            binding.tilPassword.error = "密码至少6位"
             return
         }
         binding.tilPassword.error = null
@@ -172,11 +172,9 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
             renderNotLoggedIn(state)
         }
 
-        // 更新按钮状态
-        binding.btnLoginAction.isEnabled = !state.loading
+        // 验证码按钮（仅注册/重置密码模式需要）
+        binding.btnSendCode.isVisible = state.mode != LoginMode.LOGIN
         binding.btnSendCode.isEnabled = !state.loading && !state.sendingCode && state.countdown <= 0
-
-        // 验证码倒计时
         binding.btnSendCode.text = when {
             state.sendingCode -> "发送中..."
             state.countdown > 0 -> "${state.countdown}s"

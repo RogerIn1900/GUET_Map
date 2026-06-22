@@ -109,30 +109,26 @@ class AuthService(
         )
     }
     
-    fun login(email: String, code: String): Result<LoginResponse> {
+    fun login(email: String, password: String): Result<LoginResponse> {
         // 验证邮箱格式
         if (!isValidEmail(email)) {
             return Result.failure(IllegalArgumentException("无效的邮箱格式"))
         }
-        
-        // 验证验证码
-        val validCode = verificationCodeRepository.findValidCodeByEmail(email, CodeType.LOGIN)
-        if (validCode == null || validCode.code != code) {
-            return Result.failure(IllegalArgumentException("验证码无效或已过期"))
-        }
-        
+
         // 查找用户
         val user = userRepository.findByEmail(email)
         if (user == null) {
-            return Result.failure(IllegalArgumentException("用户不存在"))
+            return Result.failure(IllegalArgumentException("用户不存在，请先注册"))
         }
-        
-        // 标记验证码已使用
-        verificationCodeRepository.markAsUsed(validCode.id)
-        
+
+        // 验证密码
+        if (!BCrypt.checkpw(password, user.passwordHash)) {
+            return Result.failure(IllegalArgumentException("密码错误"))
+        }
+
         // 生成JWT token
         val token = jwtService.generateToken(user.id, user.email)
-        
+
         return Result.success(
             LoginResponse(
                 token = token,
@@ -142,6 +138,25 @@ class AuthService(
                 userId = user.id
             )
         )
+    }
+
+    fun resetPassword(email: String, code: String, newPassword: String): Result<Unit> {
+        if (!isValidEmail(email)) {
+            return Result.failure(IllegalArgumentException("无效的邮箱格式"))
+        }
+        if (newPassword.length < 6) {
+            return Result.failure(IllegalArgumentException("密码至少6位"))
+        }
+        val validCode = verificationCodeRepository.findValidCodeByEmail(email, CodeType.RESET_PASSWORD)
+        if (validCode == null || validCode.code != code) {
+            return Result.failure(IllegalArgumentException("验证码无效或已过期"))
+        }
+        val user = userRepository.findByEmail(email)
+            ?: return Result.failure(IllegalArgumentException("用户不存在"))
+        val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
+        userRepository.updatePassword(user.id, passwordHash)
+        verificationCodeRepository.markAsUsed(validCode.id)
+        return Result.success(Unit)
     }
     
     fun getUserById(userId: Long): User? {

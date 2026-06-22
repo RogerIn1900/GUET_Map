@@ -25,7 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sendMessageUseCase: SendMessageUseCase,
-    private val getChatHistoryUseCase: GetChatHistoryUseCase
+    private val getChatHistoryUseCase: GetChatHistoryUseCase,
+    private val userPrefs: com.example.guet_map.data.UserPrefs
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Loading)
@@ -40,8 +41,14 @@ class ChatViewModel @Inject constructor(
     private val _events = MutableSharedFlow<ChatUiEvent>()
     val events: SharedFlow<ChatUiEvent> = _events.asSharedFlow()
 
-    // 对话会话 ID
-    private val sessionId = UUID.randomUUID().toString()
+    private val sessionId: String
+        get() {
+            val stored = userPrefs.chatSessionId
+            if (stored.isNotBlank()) return stored
+            val newId = UUID.randomUUID().toString()
+            userPrefs.chatSessionId = newId
+            return newId
+        }
 
     init {
         loadChatHistory()

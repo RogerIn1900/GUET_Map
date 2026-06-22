@@ -3,6 +3,7 @@ package com.example.guet_map.repository
 import com.example.guet_map.data.UserPrefs
 import com.example.guet_map.model.*
 import com.example.guet_map.network.ApiService
+import com.example.guet_map.module.ai.data.repository.TimetableRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -12,7 +13,8 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val apiService: ApiService,
     private val userPrefs: UserPrefs,
-    private val favoriteRepository: LegacyFavoriteRepository
+    private val favoriteRepository: LegacyFavoriteRepository,
+    private val timetableRepository: TimetableRepository
 ) {
 
     fun sendCode(email: String, type: String = "login"): Flow<Resource<Unit>> = flow {
@@ -37,7 +39,9 @@ class AuthRepository @Inject constructor(
             )
             if (response.success && response.data != null) {
                 userPrefs.login(email, response.data)
-                favoriteRepository.switchUser(response.data.nickname)
+                val uid = response.data.userId.takeIf { it > 0 }?.toString() ?: email.ifBlank { UserPrefs.GUEST_USER_ID }
+                favoriteRepository.switchUser(uid)
+                timetableRepository.refreshUserId()
                 emit(Resource.Success(response.data))
             } else {
                 emit(Resource.Error(response.message ?: "注册失败"))
@@ -53,8 +57,9 @@ class AuthRepository @Inject constructor(
             val response = apiService.login(LoginRequest(email.trim(), password.trim()))
             if (response.success && response.data != null) {
                 userPrefs.login(email, response.data)
-                favoriteRepository.switchUser(response.data.nickname)
+                favoriteRepository.switchUser(userPrefs.userId)
                 favoriteRepository.syncFromServer()
+                timetableRepository.refreshUserId()
                 emit(Resource.Success(response.data))
             } else {
                 emit(Resource.Error(response.message ?: "登录失败"))
@@ -81,10 +86,10 @@ class AuthRepository @Inject constructor(
     }
 
     fun logout() {
-        val previousUser = userPrefs.userId
         userPrefs.clearAll()
         userPrefs.userId = UserPrefs.GUEST_USER_ID
         favoriteRepository.switchUser(UserPrefs.GUEST_USER_ID)
+        timetableRepository.refreshUserId()
     }
 
     val isLoggedIn: Boolean get() = userPrefs.isLoggedIn

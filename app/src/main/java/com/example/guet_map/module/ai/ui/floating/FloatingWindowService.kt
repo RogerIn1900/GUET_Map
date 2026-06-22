@@ -118,6 +118,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var isDragging = false
+    private var activeTouchListener: View.OnTouchListener? = null
 
     // 是否正在编辑输入框
     private var isInputFocused = false
@@ -252,84 +253,114 @@ class FloatingWindowService : Service(), LifecycleOwner {
         }
 
         // 标题栏拖动
-        binding.titleBar.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = floatingParams?.x ?: 0
-                    initialY = floatingParams?.y ?: 0
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isDragging = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (!isDragging &&
-                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
-                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
-                    ) {
-                        isDragging = true
-                    }
-                    if (isDragging) {
-                        floatingParams?.let { params ->
-                            params.x = initialX + (event.rawX - initialTouchX).toInt()
-                            params.y = initialY + (event.rawY - initialTouchY).toInt()
-                            windowManager?.updateViewLayout(floatingView, params)
-                        }
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isDragging) {
-                        binding.mainCard.performClick()
-                    }
-                    isDragging = false
-                    true
-                }
-                else -> false
-            }
-        }
+        binding.titleBar.setOnTouchListener(createDragTouchListener())
 
         // 收起状态下把手区域点击/拖动展开
-        binding.root.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = floatingParams?.x ?: 0
-                    initialY = floatingParams?.y ?: 0
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isDragging = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (!isDragging &&
-                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
-                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
-                    ) {
-                        isDragging = true
-                    }
-                    if (isDragging) {
-                        floatingParams?.let { params ->
-                            params.x = initialX + (event.rawX - initialTouchX).toInt()
-                            params.y = initialY + (event.rawY - initialTouchY).toInt()
-                            windowManager?.updateViewLayout(floatingView, params)
-                        }
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!isDragging && !isExpanded) {
-                        expandFromEdge()
-                    } else {
-                        isDragging = false
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
+        setupRootTouchForCollapsed()
 
         // 导航卡片按钮
         setupNavCardButtons()
+    }
+
+    private fun createDragTouchListener(): View.OnTouchListener {
+        return View.OnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = floatingParams?.x ?: 0
+                    initialY = floatingParams?.y ?: 0
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
+                    activeTouchListener = this
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (activeTouchListener != this) return@OnTouchListener true
+                    if (!isDragging &&
+                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
+                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
+                    ) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        floatingParams?.let { params ->
+                            val displayMetrics = resources.displayMetrics
+                            val screenWidth = displayMetrics.widthPixels
+                            // x 坐标：gravity=END(右对齐)，params.x 是距离屏幕右边缘
+                            // rawX 是距离屏幕左边缘，需要转换
+                            val currentRightEdge = screenWidth - params.x
+                            val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
+                            params.x = screenWidth - newRightEdge
+                            params.y = initialY + (event.rawY - initialTouchY).toInt()
+                            windowManager?.updateViewLayout(floatingView, params)
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (activeTouchListener == this) {
+                        if (!isDragging) {
+                            if (v == binding.titleBar) {
+                                binding.mainCard.performClick()
+                            }
+                        }
+                        isDragging = false
+                        activeTouchListener = null
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupRootTouchForCollapsed() {
+        binding.root.setOnTouchListener { _, event ->
+            if (isExpanded) return@setOnTouchListener false
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = floatingParams?.x ?: 0
+                    initialY = floatingParams?.y ?: 0
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
+                    activeTouchListener = this
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (activeTouchListener != this) return@setOnTouchListener true
+                    if (!isDragging &&
+                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
+                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
+                    ) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        floatingParams?.let { params ->
+                            val displayMetrics = resources.displayMetrics
+                            val screenWidth = displayMetrics.widthPixels
+                            val currentRightEdge = screenWidth - params.x
+                            val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
+                            params.x = screenWidth - newRightEdge
+                            params.y = initialY + (event.rawY - initialTouchY).toInt()
+                            windowManager?.updateViewLayout(floatingView, params)
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (activeTouchListener == this) {
+                        if (!isDragging) {
+                            expandFromEdge()
+                        }
+                        isDragging = false
+                        activeTouchListener = null
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     private fun setupNavCardButtons() {

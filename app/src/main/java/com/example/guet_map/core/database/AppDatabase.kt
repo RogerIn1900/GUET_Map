@@ -49,7 +49,7 @@ import com.example.guet_map.module.social.data.local.entity.WeatherEntity
         PhotoAlbumEntity::class,
         PhotoEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

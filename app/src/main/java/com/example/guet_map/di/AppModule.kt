@@ -77,7 +77,6 @@ object AppModule {
             AppDatabase::class.java,
             "guet_map.db"
         )
-            .fallbackToDestructiveMigration()
             .build()
     }
 

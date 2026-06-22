@@ -14,5 +14,6 @@ data class ChatMessageEntity(
     val content: String,
     val timestamp: Long,
     val locationId: String? = null,
-    val sessionId: String  // 对话会话 ID
+    val sessionId: String,
+    val userId: String  // 用户 ID，用于数据隔离
 )
