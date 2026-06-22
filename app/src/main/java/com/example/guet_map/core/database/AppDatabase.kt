@@ -11,6 +11,7 @@ import com.example.guet_map.local.entity.LegacyFavoriteEntity
 import com.example.guet_map.local.entity.LegacyLocationEntity
 import com.example.guet_map.module.ai.data.local.entity.ChatMessageEntity
 import com.example.guet_map.module.ai.data.local.entity.ReviewEntity
+import com.example.guet_map.module.ai.data.local.entity.TimetableEntryEntity
 import com.example.guet_map.module.location.data.local.entity.AnnouncementEntity
 import com.example.guet_map.module.location.data.local.entity.OfflineMapEntity
 import com.example.guet_map.module.social.data.local.entity.FavoriteEntity
@@ -36,6 +37,7 @@ import com.example.guet_map.module.social.data.local.entity.WeatherEntity
         // ========== AI 模块 ==========
         ChatMessageEntity::class,
         ReviewEntity::class,
+        TimetableEntryEntity::class,
 
         // ========== Location 模块 ==========
         AnnouncementEntity::class,
@@ -47,7 +49,7 @@ import com.example.guet_map.module.social.data.local.entity.WeatherEntity
         PhotoAlbumEntity::class,
         PhotoEntity::class
     ],
-    version = 1,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -66,6 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
     // ========== AI 模块 DAOs ==========
     abstract fun chatMessageDao(): com.example.guet_map.module.ai.data.local.dao.ChatMessageDao
     abstract fun reviewDao(): com.example.guet_map.module.ai.data.local.dao.ReviewDao
+    abstract fun timetableEntryDao(): com.example.guet_map.module.ai.data.local.dao.TimetableEntryDao
 
     // ========== Location 模块 DAOs ==========
     abstract fun announcementDao(): com.example.guet_map.module.location.data.local.dao.AnnouncementDao

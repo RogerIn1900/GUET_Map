@@ -46,4 +46,28 @@ sealed class ChatUiEvent {
         val alertMessage: String?,
         val safetyTips: String?
     ) : ChatUiEvent()
+
+    data class ShowTimetableNavigationCard(
+        val courseName: String,
+        val classroomName: String,
+        val dayOfWeek: String,
+        val formatTime: String,
+        val departureTime: String,
+        val arriveTime: String,
+        val walkingMinutes: Int,
+        val warningMessage: String,
+        val timing: String,
+        val targetLocationId: String?,
+        val targetLatitude: Double?,
+        val targetLongitude: Double?
+    ) : ChatUiEvent()
+
+    data class ShowTimetableNavigation(
+        val courseName: String,
+        val classroomName: String,
+        val targetLocationId: String?
+    ) : ChatUiEvent()
+
+    data object TimetableNavigationConfirmed : ChatUiEvent()
+    data object TimetableNavigationCancelled : ChatUiEvent()
 }

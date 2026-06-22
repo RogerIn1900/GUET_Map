@@ -1,27 +1,27 @@
 package com.example.guet_map.network
 
-import com.example.guet_map.model.AppNotification
-import com.example.guet_map.model.Category
-import com.example.guet_map.model.FavoriteRequest
-import com.example.guet_map.model.GuideStep
-import com.example.guet_map.model.Location
-import com.example.guet_map.model.LoginRequest
-import com.example.guet_map.model.LoginResponse
-import com.example.guet_map.model.MyGuideSubmission
-import com.example.guet_map.model.RecentGuide
-import com.example.guet_map.model.UploadResponse
+import com.example.guet_map.model.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
-import retrofit2.http.Body
-import retrofit2.http.DELETE
-import retrofit2.http.GET
-import retrofit2.http.Multipart
-import retrofit2.http.POST
-import retrofit2.http.Part
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 
 interface ApiService {
+
+    // ========== Auth APIs ==========
+
+    @POST("api/v1/auth/send-code")
+    suspend fun sendCode(@Body request: SendCodeRequest): ApiResponse<Unit>
+
+    @POST("api/v1/auth/register")
+    suspend fun register(@Body request: RegisterRequest): ApiResponse<LoginResponse>
+
+    @POST("api/v1/auth/login")
+    suspend fun login(@Body request: LoginRequest): ApiResponse<LoginResponse>
+
+    @POST("api/v1/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): ApiResponse<Unit>
+
+    // ========== Location APIs ==========
 
     @GET("api/v1/locations")
     suspend fun getLocations(): List<Location>
@@ -80,6 +80,9 @@ interface ApiService {
     @GET("api/v1/notifications")
     suspend fun getNotifications(): List<AppNotification>
 
-    @POST("api/v1/auth/login")
-    suspend fun login(@Body body: LoginRequest): LoginResponse
+    @PUT("api/v1/notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: Long)
+
+    @PUT("api/v1/notifications/read-all")
+    suspend fun markAllNotificationsRead()
 }

@@ -49,6 +49,8 @@ class AiResponseParser @Inject constructor(
             "show_route" -> AiAction.ActionType.SHOW_ROUTE
             "ask_permission" -> AiAction.ActionType.ASK_PERMISSION
             "clarify" -> AiAction.ActionType.CLARIFY
+            "show_weather" -> AiAction.ActionType.SHOW_WEATHER
+            "show_timetable_navigation" -> AiAction.ActionType.SHOW_TIMETABLE_NAVIGATION
             else -> return fallback("AI 返回了暂不支持的操作，请换一种方式描述需求。")
         }
         val payloadObject = jsonObject.getAsJsonObject("payload") ?: JsonObject()
@@ -74,6 +76,7 @@ class AiResponseParser @Inject constructor(
             AiAction.ActionType.CLARIFY -> payload["question"]?.toString()
                 ?: "请补充更完整的信息。"
             AiAction.ActionType.SHOW_WEATHER -> "正在为你查询天气信息..."
+            AiAction.ActionType.SHOW_TIMETABLE_NAVIGATION -> "正在为你生成课表导航建议..."
         }
     }
 

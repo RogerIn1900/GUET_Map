@@ -30,12 +30,12 @@
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="通知" />
+            android:text="@string/notifications_tab_mine" />
 
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="公告" />
+            android:text="@string/notifications_tab_announcement" />
 
     </com.google.android.material.tabs.TabLayout>
 

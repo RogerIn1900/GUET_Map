@@ -186,6 +186,18 @@ class ChatFragment : Fragment() {
             is ChatUiEvent.ShowWeather -> {
                 handleWeatherEvent(event)
             }
+
+            is ChatUiEvent.ShowTimetableNavigationCard,
+            is ChatUiEvent.ShowTimetableNavigation -> {
+                Toast.makeText(
+                    requireContext(),
+                    "课表导航功能仅在悬浮窗模式可用",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            ChatUiEvent.TimetableNavigationConfirmed,
+            ChatUiEvent.TimetableNavigationCancelled -> Unit
         }
     }
 

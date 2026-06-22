@@ -2,6 +2,8 @@ package com.example.guet_map.network
 
 import com.example.guet_map.model.FavoriteRequest
 import com.example.guet_map.model.LoginRequest
+import com.example.guet_map.model.RegisterRequest
+import com.example.guet_map.model.SendCodeRequest
 import com.example.guet_map.util.CampusBuildingCatalog
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -34,6 +36,8 @@ class MockInterceptor : Interceptor {
 
         val body = when {
             path == "/api/v1/auth/login" && method == "POST" -> handleLogin(request)
+            path == "/api/v1/auth/register" && method == "POST" -> handleRegister(request)
+            path == "/api/v1/auth/send-code" && method == "POST" -> handleSendCode(request)
             path == "/api/v1/categories" -> CATEGORIES_JSON
             path == "/api/v1/favorites" && method == "GET" -> favoritesJsonForUser(mockUserId)
             path.matches(Regex("/api/v1/favorites/[^/]+")) && method == "DELETE" -> {
@@ -82,23 +86,49 @@ class MockInterceptor : Interceptor {
 
     private fun handleLogin(request: okhttp3.Request): String {
         val login = readBody(request, LoginRequest::class.java)
-        val username = login?.username?.trim().orEmpty().ifBlank { "guest" }
-        MockSession.activeUserId = username
-        if (!favoritesByUser.containsKey(username)) {
-            favoritesByUser[username] = defaultFavoriteIdsForUser(username).toMutableList()
+        val email = login?.email?.trim().orEmpty()
+        // Mock: accept any email with a 6-digit code
+        val userId = email.substringBefore("@").ifBlank { "guest" }
+        MockSession.activeUserId = userId
+        if (!favoritesByUser.containsKey(userId)) {
+            favoritesByUser[userId] = defaultFavoriteIdsForUser(userId).toMutableList()
         }
-        val points = when (username) {
+        val points = when (userId) {
             "guest" -> 0
-            else -> (username.hashCode() and 0x7FFF) % 50 + 5
+            else -> (userId.hashCode() and 0x7FFF) % 50 + 5
         }
         return gson.toJson(
             mapOf(
-                "token" to "mock_token_$username",
-                "nickname" to username,
+                "token" to "mock_token_$userId",
+                "nickname" to userId,
                 "points" to points,
-                "contributionCount" to 1
+                "contributionCount" to 1,
+                "email" to email
             )
         )
+    }
+
+    private fun handleRegister(request: okhttp3.Request): String {
+        val reg = readBody(request, RegisterRequest::class.java)
+        val email = reg?.email?.trim().orEmpty()
+        val nickname = reg?.nickname?.trim()?.ifBlank { email.substringBefore("@") } ?: email.substringBefore("@")
+        val userId = email.substringBefore("@").ifBlank { "user_${System.currentTimeMillis()}" }
+        MockSession.activeUserId = userId
+        favoritesByUser[userId] = mutableListOf()
+        return gson.toJson(
+            mapOf(
+                "token" to "mock_token_$userId",
+                "nickname" to nickname,
+                "points" to 0,
+                "contributionCount" to 0,
+                "email" to email
+            )
+        )
+    }
+
+    private fun handleSendCode(request: okhttp3.Request): String {
+        // Mock: always succeeds after a short delay (simulated)
+        return """{"success":true,"message":"验证码已发送"}"""
     }
 
     private fun defaultFavoriteIdsForUser(username: String): List<String> = when (username) {

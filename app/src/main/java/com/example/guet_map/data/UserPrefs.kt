@@ -21,6 +21,10 @@ class UserPrefs @Inject constructor(
         get() = prefs.getString(KEY_NICKNAME, "") ?: ""
         set(value) = prefs.edit().putString(KEY_NICKNAME, value).apply()
 
+    var email: String
+        get() = prefs.getString(KEY_EMAIL, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_EMAIL, value).apply()
+
     var points: Int
         get() = prefs.getInt(KEY_POINTS, 0)
         set(value) = prefs.edit().putInt(KEY_POINTS, value).apply()
@@ -29,7 +33,6 @@ class UserPrefs @Inject constructor(
         get() = prefs.getString(KEY_AUTH_TOKEN, "") ?: ""
         set(value) = prefs.edit().putString(KEY_AUTH_TOKEN, value).apply()
 
-    /** 当前登录用户 ID（学号/用户名），未登录为 guest */
     var userId: String
         get() = prefs.getString(KEY_USER_ID, GUEST_USER_ID) ?: GUEST_USER_ID
         set(value) = prefs.edit().putString(KEY_USER_ID, value.ifBlank { GUEST_USER_ID }).apply()
@@ -42,9 +45,10 @@ class UserPrefs @Inject constructor(
         points += earned
     }
 
-    fun login(username: String, response: com.example.guet_map.model.LoginResponse) {
+    fun login(email: String, response: com.example.guet_map.model.LoginResponse) {
         isLoggedIn = true
-        userId = username.ifBlank { GUEST_USER_ID }
+        this.email = email
+        userId = email.ifBlank { GUEST_USER_ID }
         authToken = response.token
         nickname = response.nickname
         points = response.points
@@ -59,6 +63,7 @@ class UserPrefs @Inject constructor(
         private const val PREFS_NAME = "user_prefs"
         private const val KEY_LOGGED_IN = "logged_in"
         private const val KEY_NICKNAME = "nickname"
+        private const val KEY_EMAIL = "email"
         private const val KEY_POINTS = "points"
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_CONTRIBUTION_COUNT = "contribution_count"

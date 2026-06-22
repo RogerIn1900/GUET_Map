@@ -18,7 +18,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "BASE_URL", "\"https://api.guetmap.example.com/\"")
+        buildConfigField("String", "BASE_URL", "\"http://192.168.100.100:8080/\"")
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"\"")
 
         ndk {
@@ -27,9 +27,9 @@ android {
         }
     }
 
-    buildTypes {
+        buildTypes {
         debug {
-            buildConfigField("boolean", "USE_MOCK_API", "true")
+            buildConfigField("boolean", "USE_MOCK_API", "false")
         }
         release {
             isMinifyEnabled = false

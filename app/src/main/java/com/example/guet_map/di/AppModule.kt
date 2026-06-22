@@ -101,12 +101,24 @@ object AppModule {
     @Provides
     fun provideReviewDao(database: AppDatabase) = database.reviewDao()
 
+    @Provides
+    fun provideTimetableEntryDao(database: AppDatabase) = database.timetableEntryDao()
+
     // ========== Location 模块 DAOs ==========
     @Provides
     fun provideAnnouncementDao(database: AppDatabase) = database.announcementDao()
 
     @Provides
     fun provideOfflineMapDao(database: AppDatabase) = database.offlineMapDao()
+
+    // ========== AI 模块 ==========
+    @Provides
+    @Singleton
+    fun provideTimetableRepository(
+        timetableEntryDao: com.example.guet_map.module.ai.data.local.dao.TimetableEntryDao,
+        userPrefs: UserPrefs
+    ): com.example.guet_map.module.ai.data.repository.TimetableRepository =
+        com.example.guet_map.module.ai.data.repository.TimetableRepository(timetableEntryDao, userPrefs)
 
     // ========== Legacy DAOs (for old code compatibility) ==========
     @Provides

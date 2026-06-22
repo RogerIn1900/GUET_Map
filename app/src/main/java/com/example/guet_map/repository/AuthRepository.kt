@@ -1,9 +1,7 @@
 package com.example.guet_map.repository
 
 import com.example.guet_map.data.UserPrefs
-import com.example.guet_map.model.LoginRequest
-import com.example.guet_map.model.LoginResponse
-import com.example.guet_map.model.Resource
+import com.example.guet_map.model.*
 import com.example.guet_map.network.ApiService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -17,17 +15,68 @@ class AuthRepository @Inject constructor(
     private val favoriteRepository: LegacyFavoriteRepository
 ) {
 
-    fun login(username: String, password: String): Flow<Resource<LoginResponse>> = flow {
+    fun sendCode(email: String, type: String = "login"): Flow<Resource<Unit>> = flow {
         emit(Resource.Loading)
         try {
-            val normalizedUser = username.trim().ifBlank { UserPrefs.GUEST_USER_ID }
-            val response = apiService.login(LoginRequest(normalizedUser, password))
-            userPrefs.login(normalizedUser, response)
-            favoriteRepository.switchUser(normalizedUser)
-            favoriteRepository.syncFromServer()
-            emit(Resource.Success(response))
+            val response = apiService.sendCode(SendCodeRequest(email, type))
+            if (response.success) {
+                emit(Resource.Success(Unit))
+            } else {
+                emit(Resource.Error(response.message ?: "发送失败"))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error("发送失败: ${e.localizedMessage}"))
+        }
+    }
+
+    fun register(email: String, code: String, nickname: String, password: String): Flow<Resource<LoginResponse>> = flow {
+        emit(Resource.Loading)
+        try {
+            val response = apiService.register(
+                RegisterRequest(email.trim(), code.trim(), nickname.trim(), password.trim())
+            )
+            if (response.success && response.data != null) {
+                userPrefs.login(email, response.data)
+                favoriteRepository.switchUser(response.data.nickname)
+                emit(Resource.Success(response.data))
+            } else {
+                emit(Resource.Error(response.message ?: "注册失败"))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error("注册失败: ${e.localizedMessage}"))
+        }
+    }
+
+    fun login(email: String, password: String): Flow<Resource<LoginResponse>> = flow {
+        emit(Resource.Loading)
+        try {
+            val response = apiService.login(LoginRequest(email.trim(), password.trim()))
+            if (response.success && response.data != null) {
+                userPrefs.login(email, response.data)
+                favoriteRepository.switchUser(response.data.nickname)
+                favoriteRepository.syncFromServer()
+                emit(Resource.Success(response.data))
+            } else {
+                emit(Resource.Error(response.message ?: "登录失败"))
+            }
         } catch (e: Exception) {
             emit(Resource.Error("登录失败: ${e.localizedMessage}"))
+        }
+    }
+
+    fun resetPassword(email: String, code: String, newPassword: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading)
+        try {
+            val response = apiService.resetPassword(
+                ResetPasswordRequest(email.trim(), code.trim(), newPassword.trim())
+            )
+            if (response.success) {
+                emit(Resource.Success(Unit))
+            } else {
+                emit(Resource.Error(response.message ?: "重置失败"))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error("重置失败: ${e.localizedMessage}"))
         }
     }
 

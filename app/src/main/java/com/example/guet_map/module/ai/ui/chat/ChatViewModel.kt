@@ -102,6 +102,7 @@ class ChatViewModel @Inject constructor(
             AiAction.ActionType.ASK_PERMISSION -> emitPermissionEvent(action.payload)
             AiAction.ActionType.CLARIFY -> emitClarifyEvent(action.payload)
             AiAction.ActionType.SHOW_WEATHER -> emitWeatherEvent(action.payload)
+            AiAction.ActionType.SHOW_TIMETABLE_NAVIGATION -> emitTimetableNavigationEvent(action.payload)
         }
     }
 
@@ -159,6 +160,25 @@ class ChatViewModel @Inject constructor(
                 uvIndex = payload["uvIndex"]?.toString()?.toIntOrNull(),
                 alertMessage = payload["alertMessage"]?.toString(),
                 safetyTips = payload["safetyTips"]?.toString()
+            )
+        )
+    }
+
+    private suspend fun emitTimetableNavigationEvent(payload: Map<String, Any?>) {
+        _events.emit(
+            ChatUiEvent.ShowTimetableNavigationCard(
+                courseName = payload["courseName"]?.toString() ?: "",
+                classroomName = payload["classroomName"]?.toString() ?: "",
+                dayOfWeek = payload["dayOfWeek"]?.toString() ?: "",
+                formatTime = payload["formatTime"]?.toString() ?: "",
+                departureTime = payload["departureTime"]?.toString() ?: "",
+                arriveTime = payload["arriveTime"]?.toString() ?: "",
+                walkingMinutes = payload["walkingMinutes"]?.toString()?.toIntOrNull() ?: 0,
+                warningMessage = payload["warningMessage"]?.toString() ?: "",
+                timing = payload["timing"]?.toString() ?: "",
+                targetLocationId = payload["targetLocationId"]?.toString(),
+                targetLatitude = payload["targetLatitude"]?.toString()?.toDoubleOrNull(),
+                targetLongitude = payload["targetLongitude"]?.toString()?.toDoubleOrNull()
             )
         )
     }

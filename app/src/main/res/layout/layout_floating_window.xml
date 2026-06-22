@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mainCard"
     android:layout_width="280dp"
     android:layout_height="400dp"
     app:cardCornerRadius="12dp"
@@ -39,6 +40,16 @@
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
+            <!-- 课表导入按钮 -->
+            <ImageButton
+                android:id="@+id/buttonImportTimetable"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@android:color/transparent"
+                android:src="@android:drawable/ic_menu_agenda"
+                android:tint="@android:color/white"
+                android:contentDescription="导入课表" />
+
             <ImageButton
                 android:id="@+id/buttonMinimize"
                 android:layout_width="32dp"
@@ -59,59 +70,71 @@
 
         </LinearLayout>
 
-        <!-- 消息列表 -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewMessages"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:padding="8dp"
-            android:clipToPadding="false"
-            app:layout_constraintBottom_toTopOf="@id/inputLayout"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/titleBar" />
-
-        <!-- 加载中 -->
-        <ProgressBar
-            android:id="@+id/progressBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"
-            app:layout_constraintBottom_toTopOf="@id/inputLayout"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/titleBar" />
-
-        <!-- 输入区域 -->
+        <!-- 主内容区 -->
         <LinearLayout
-            android:id="@+id/inputLayout"
+            android:id="@+id/mainCardContent"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@android:color/white"
-            app:layout_constraintBottom_toBottomOf="parent">
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/titleBar">
 
-            <EditText
-                android:id="@+id/editTextMessage"
-                android:layout_width="0dp"
+            <!-- 课表导航卡片 -->
+            <include
+                android:id="@+id/navCard"
+                layout="@layout/item_timetable_nav_card"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@android:drawable/edit_text"
-                android:hint="输入消息..."
-                android:inputType="textMultiLine"
-                android:maxLines="3"
-                android:textSize="14sp" />
+                android:visibility="gone" />
 
-            <ImageButton
-                android:id="@+id/buttonSend"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:background="#6200EE"
-                android:src="@android:drawable/ic_menu_send"
-                android:tint="@android:color/white"
-                android:contentDescription="发送" />
+            <!-- 消息列表 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewMessages"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:padding="8dp"
+                android:clipToPadding="false" />
+
+            <!-- 加载中 -->
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+
+            <!-- 输入区域 -->
+            <LinearLayout
+                android:id="@+id/inputLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="8dp"
+                android:background="@android:color/white">
+
+                <EditText
+                    android:id="@+id/editTextMessage"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@android:drawable/edit_text"
+                    android:hint="输入消息..."
+                    android:inputType="textMultiLine"
+                    android:maxLines="3"
+                    android:textSize="14sp" />
+
+                <ImageButton
+                    android:id="@+id/buttonSend"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="#6200EE"
+                    android:src="@android:drawable/ic_menu_send"
+                    android:tint="@android:color/white"
+                    android:contentDescription="发送" />
+
+            </LinearLayout>
 
         </LinearLayout>
 

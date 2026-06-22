@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * 通知实体
+ * 通知实体（按用户隔离）
  */
 @Entity(tableName = "notifications")
 data class NotificationEntity(
@@ -19,5 +19,7 @@ data class NotificationEntity(
     @ColumnInfo(name = "is_read")
     val isRead: Boolean = false,
     @ColumnInfo(name = "created_at")
-    val createdAt: String = ""
+    val createdAt: String = "",
+    @ColumnInfo(name = "user_id")
+    val userId: String = ""
 )
