@@ -59,6 +59,7 @@ class CheckInPostAdapter(
 
                 root.setOnClickListener { onCommentClick(post.id) }
                 layoutLike.setOnClickListener { onLikeClick(post.id) }
+                layoutComment.setOnClickListener { onCommentClick(post.id) }
             }
         }
 

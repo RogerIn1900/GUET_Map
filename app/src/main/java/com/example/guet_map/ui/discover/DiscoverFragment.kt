@@ -17,9 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentDiscoverBinding
 import com.example.guet_map.ui.MainNavViewModel
-import com.example.guet_map.ui.common.LocationCardAdapter
 import com.google.android.material.chip.Chip
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayout
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -40,9 +38,6 @@ class DiscoverFragment : Fragment() {
 
     private lateinit var checkInPostAdapter: CheckInPostAdapter
     private lateinit var eventAdapter: EventAdapter
-    private lateinit var favoritesAdapter: LocationCardAdapter
-
-    private var lastFavoritesState: List<com.example.guet_map.model.Location> = emptyList()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -74,7 +69,6 @@ class DiscoverFragment : Fragment() {
                 when (tab?.position) {
                     0 -> showCheckInTab()
                     1 -> showEventsTab()
-                    2 -> showFavoritesTab()
                 }
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
@@ -88,7 +82,7 @@ class DiscoverFragment : Fragment() {
                 viewModel.toggleLike(postId)
             },
             onCommentClick = { postId ->
-                Toast.makeText(context, "评论功能开发中", Toast.LENGTH_SHORT).show()
+                showCommentDialog(postId)
             }
         )
 
@@ -96,22 +90,6 @@ class DiscoverFragment : Fragment() {
             sharedViewModel.setSelectedEvent(event)
             findNavController().navigate(R.id.nav_event_detail)
         }
-
-        favoritesAdapter = LocationCardAdapter(
-            onItemClick = { location ->
-                mainNavViewModel.openLocationOnMap(location.locationId)
-            },
-            onItemLongClick = { location ->
-                MaterialAlertDialogBuilder(requireContext())
-                    .setTitle("取消收藏")
-                    .setMessage("确定取消收藏「${location.name}」？")
-                    .setPositiveButton("确定") { _, _ ->
-                        viewModel.removeFavorite(location.locationId)
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-            }
-        )
 
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(context)
@@ -166,6 +144,13 @@ class DiscoverFragment : Fragment() {
         dialog.show(childFragmentManager, "publish_checkin")
     }
 
+    private fun showCommentDialog(postId: String) {
+        val post = viewModel.getFilteredPosts().find { it.id == postId }
+        val authorName = post?.userName ?: "用户"
+        val dialog = CommentDialog.newInstance(postId, authorName)
+        dialog.show(childFragmentManager, "comment")
+    }
+
     private fun observeData() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -195,15 +180,6 @@ class DiscoverFragment : Fragment() {
                 launch {
                     viewModel.selectedTopic.collect {
                         checkInPostAdapter.submitList(viewModel.getFilteredPosts())
-                    }
-                }
-                launch {
-                    viewModel.favorites.collect { list ->
-                        lastFavoritesState = list
-                        favoritesAdapter.submitList(list)
-                        if (binding.tabLayout.selectedTabPosition == 2) {
-                            updateEmptyState(list)
-                        }
                     }
                 }
             }
@@ -264,15 +240,6 @@ class DiscoverFragment : Fragment() {
         binding.recyclerView.adapter = eventAdapter
         eventAdapter.submitList(viewModel.getFilteredEvents())
         updateEmptyState(viewModel.getFilteredEvents())
-    }
-
-    private fun showFavoritesTab() {
-        binding.layoutPublishBar.isVisible = false
-        binding.chipGroupTopics.isVisible = false
-        binding.layoutCalendarNav.isVisible = false
-        binding.recyclerView.adapter = favoritesAdapter
-        favoritesAdapter.submitList(lastFavoritesState)
-        updateEmptyState(lastFavoritesState)
     }
 
     private fun updateEmptyState(list: List<*>) {
