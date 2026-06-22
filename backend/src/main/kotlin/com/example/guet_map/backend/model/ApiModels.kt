@@ -38,6 +38,7 @@ data class ApiResponse<T>(
 data class LoginResponse(
     @SerializedName("token") val token: String,
     @SerializedName("nickname") val nickname: String,
+    @SerializedName("avatar") val avatar: String? = null,
     @SerializedName("points") val points: Int,
     @SerializedName("contributionCount") val contributionCount: Int = 0,
     @SerializedName("userId") val userId: Long = 0

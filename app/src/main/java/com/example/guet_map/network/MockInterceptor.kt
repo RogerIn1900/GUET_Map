@@ -27,6 +27,7 @@ class MockInterceptor : Interceptor {
 
     private val favoritesByUser = ConcurrentHashMap<String, MutableList<String>>()
     private val mockUsers = ConcurrentHashMap<String, MockUser>()
+    private val verificationCodes = ConcurrentHashMap<String, String>() // email -> code
 
     private data class MockUser(val email: String, val password: String, val nickname: String)
 
@@ -126,10 +127,23 @@ class MockInterceptor : Interceptor {
         val reg = readBody(request, RegisterRequest::class.java)
         val email = reg?.email?.trim().orEmpty()
         val password = reg?.password?.trim().orEmpty()
+        val code = reg?.code?.trim().orEmpty()
         val nickname = reg?.nickname?.trim()?.ifBlank { email.substringBefore("@") } ?: email.substringBefore("@")
         val userId = email.substringBefore("@").ifBlank { "user_${System.currentTimeMillis()}" }
+
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
+        }
         if (password.length < 6) {
             return gson.toJson(mapOf("success" to false, "message" to "密码至少6位"))
+        }
+        if (code.length != 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "请输入6位验证码"))
+        }
+        // 验证验证码（开发模式下接受任意6位数字，或使用生成的验证码）
+        val expectedCode = verificationCodes[email.lowercase()]
+        if (expectedCode != null && expectedCode != code && code != "123456") {
+            return gson.toJson(mapOf("success" to false, "message" to "验证码错误"))
         }
         val normalizedEmail = email.lowercase()
         if (mockUsers.containsKey(normalizedEmail)) {
@@ -138,6 +152,7 @@ class MockInterceptor : Interceptor {
         mockUsers[normalizedEmail] = MockUser(normalizedEmail, password, nickname)
         MockSession.activeUserId = userId
         favoritesByUser[userId] = mutableListOf()
+        verificationCodes.remove(normalizedEmail) // 注册成功后删除验证码
         return gson.toJson(
             mapOf(
                 "success" to true,
@@ -151,8 +166,17 @@ class MockInterceptor : Interceptor {
     }
 
     private fun handleSendCode(request: okhttp3.Request): String {
-        // Mock: always succeeds after a short delay (simulated)
-        return """{"success":true,"message":"验证码已发送"}"""
+        val sendCode = readBody(request, SendCodeRequest::class.java)
+        val email = sendCode?.email?.trim()?.lowercase().orEmpty()
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
+        }
+        // 生成6位验证码
+        val code = (100000..999999).random().toString()
+        verificationCodes[email] = code
+        // 开发模式下直接返回成功，验证码会在日志中输出
+        android.util.Log.d("MockInterceptor", "验证码 for $email: $code")
+        return gson.toJson(mapOf("success" to true, "message" to "验证码已发送"))
     }
 
     private fun defaultFavoriteIdsForUser(username: String): List<String> = when (username) {

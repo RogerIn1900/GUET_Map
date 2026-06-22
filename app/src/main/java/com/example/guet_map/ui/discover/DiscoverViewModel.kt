@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.guet_map.data.UserPrefs
 import com.example.guet_map.model.Location
+import com.example.guet_map.model.PostWithDetails
+import com.example.guet_map.model.Resource
 import com.example.guet_map.repository.LegacyFavoriteRepository
+import com.example.guet_map.repository.SocialRepository
 import com.example.guet_map.ui.discover.model.CampusEvent
 import com.example.guet_map.ui.discover.model.CheckInPost
 import com.example.guet_map.ui.discover.model.EventCategory
@@ -23,6 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
     private val favoriteRepository: LegacyFavoriteRepository,
+    private val socialRepository: SocialRepository,
     private val userPrefs: UserPrefs
 ) : ViewModel() {
 
@@ -45,13 +49,55 @@ class DiscoverViewModel @Inject constructor(
     private val _selectedDateMillis = MutableStateFlow(todayStartMillis())
     val selectedDateMillis: StateFlow<Long> = _selectedDateMillis.asStateFlow()
 
-    private val likedPosts = mutableSetOf<String>()
+    private val likedPosts = mutableSetOf<Long>()
 
     init {
         loadMockData()
+        loadPostsFromServer()
         viewModelScope.launch {
             favoriteRepository.syncFromServer()
         }
+    }
+
+    private fun loadPostsFromServer() {
+        viewModelScope.launch {
+            socialRepository.getPosts().collect { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        val posts = resource.data.map { it.toCheckInPost() }
+                        _checkInPosts.value = posts
+                    }
+                    is Resource.Error -> {
+                        // 静默失败，使用本地数据
+                    }
+                    is Resource.Loading -> {}
+                }
+            }
+        }
+    }
+
+    private fun PostWithDetails.toCheckInPost(): CheckInPost {
+        val post = this.post
+        return CheckInPost(
+            id = post.id.toString(),
+            userId = post.userId.toString(),
+            userName = this.userInfo?.nickname ?: "匿名用户",
+            userAvatar = this.userInfo?.avatar,
+            locationId = post.locationId ?: "",
+            locationName = post.locationId ?: "未知地点",
+            content = post.content,
+            imageUrls = emptyList(),
+            topics = emptyList(),
+            timestamp = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
+                    .parse(post.createdAt)?.time ?: System.currentTimeMillis()
+            } catch (e: Exception) {
+                System.currentTimeMillis()
+            },
+            likeCount = this.likeCount,
+            commentCount = this.commentCount,
+            isLiked = this.isLiked
+        )
     }
 
     private fun todayStartMillis(): Long {
@@ -216,21 +262,33 @@ class DiscoverViewModel @Inject constructor(
 
     fun toggleLike(postId: String) {
         viewModelScope.launch {
-            val currentPosts = _checkInPosts.value.toMutableList()
-            val index = currentPosts.indexOfFirst { it.id == postId }
-            if (index != -1) {
-                val post = currentPosts[index]
-                val isNowLiked = !likedPosts.contains(postId)
-                if (isNowLiked) {
-                    likedPosts.add(postId)
-                } else {
-                    likedPosts.remove(postId)
+            val postIdLong = postId.toLongOrNull() ?: return@launch
+
+            socialRepository.togglePostLike(postIdLong).collect { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        val currentPosts = _checkInPosts.value.toMutableList()
+                        val index = currentPosts.indexOfFirst { it.id == postId }
+                        if (index != -1) {
+                            val post = currentPosts[index]
+                            val isNowLiked = resource.data
+                            if (isNowLiked) {
+                                likedPosts.add(postIdLong)
+                            } else {
+                                likedPosts.remove(postIdLong)
+                            }
+                            currentPosts[index] = post.copy(
+                                isLiked = isNowLiked,
+                                likeCount = if (isNowLiked) post.likeCount + 1 else post.likeCount - 1
+                            )
+                            _checkInPosts.value = currentPosts
+                        }
+                    }
+                    is Resource.Error -> {
+                        // 静默失败
+                    }
+                    is Resource.Loading -> {}
                 }
-                currentPosts[index] = post.copy(
-                    isLiked = isNowLiked,
-                    likeCount = if (isNowLiked) post.likeCount + 1 else post.likeCount - 1
-                )
-                _checkInPosts.value = currentPosts
             }
         }
     }
@@ -240,6 +298,7 @@ class DiscoverViewModel @Inject constructor(
             val currentUserId = userPrefs.userId.ifBlank { "guest" }
             val currentNickname = userPrefs.nickname.ifBlank { "匿名用户" }
 
+            // 先添加本地预览
             val newPost = CheckInPost(
                 id = UUID.randomUUID().toString(),
                 userId = currentUserId,
@@ -267,6 +326,23 @@ class DiscoverViewModel @Inject constructor(
                 }
             }
             _topics.value = allTopics
+
+            // 调用 API 发布到服务器
+            socialRepository.createPost(
+                content = content,
+                locationId = locationName,
+                visibility = "public"
+            ).collect { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        // API 发布成功，可以做后续处理
+                    }
+                    is Resource.Error -> {
+                        // 静默失败，本地已添加
+                    }
+                    is Resource.Loading -> {}
+                }
+            }
         }
     }
 

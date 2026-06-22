@@ -4,6 +4,11 @@ import com.example.guet_map.backend.config.ConfigLoader
 import com.example.guet_map.backend.db.Database
 import com.example.guet_map.backend.routes.authRoutes
 import com.example.guet_map.backend.routes.notificationRoutes
+import com.example.guet_map.backend.routes.friendRoutes
+import com.example.guet_map.backend.routes.messageRoutes
+import com.example.guet_map.backend.routes.postRoutes
+import com.example.guet_map.backend.routes.locationRoutes
+import com.example.guet_map.backend.routes.userRoutes
 import com.example.guet_map.backend.service.AuthService
 import com.example.guet_map.backend.service.JwtService
 import com.example.guet_map.backend.service.NotificationService
@@ -17,6 +22,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.serialization.gson.*
 import io.ktor.server.routing.*
+import io.ktor.server.plugins.callloging.CallLogging
 import org.slf4j.LoggerFactory
 import java.io.File
 
@@ -69,7 +75,7 @@ fun main() {
         }
         
         // 打印请求日志
-        install(io.ktor.server.plugins.callloging.CallLogging) {
+        install(CallLogging) {
             logger = LoggerFactory.getLogger("ktor.call")
         }
         
@@ -90,9 +96,24 @@ fun main() {
             
             // 认证相关路由
             authRoutes(authService, jwtService, notificationService)
-            
+
             // 通知相关路由
             notificationRoutes(notificationService, jwtService)
+
+            // 好友相关路由
+            friendRoutes(jwtService)
+
+            // 消息相关路由
+            messageRoutes(jwtService)
+
+            // 帖子相关路由
+            postRoutes(jwtService)
+
+            // 位置相关路由
+            locationRoutes(jwtService)
+
+            // 用户资料路由
+            userRoutes(jwtService)
         }
         
     }.start(wait = true)

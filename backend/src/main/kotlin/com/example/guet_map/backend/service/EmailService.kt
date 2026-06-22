@@ -48,7 +48,6 @@ class EmailService {
     
     fun sendVerificationCode(toEmail: String, code: String): Result<Unit> {
         if (!config.enabled) {
-            // 如果邮件服务未启用，返回模拟成功（开发模式）
             println("[DEV MODE] Verification code for $toEmail: $code")
             return Result.success(Unit)
         }

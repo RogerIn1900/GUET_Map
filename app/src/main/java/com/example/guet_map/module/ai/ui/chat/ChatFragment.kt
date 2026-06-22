@@ -47,13 +47,12 @@ class ChatFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         setupSendButton()
-        setupFloatingBubbleButton()
         observeState()
     }
 
     private fun setupRecyclerView() {
         messageAdapter = ChatMessageAdapter()
-        binding.recyclerViewMessages.apply {
+        binding.recyclerView.apply {
             adapter = messageAdapter
             layoutManager = LinearLayoutManager(requireContext()).apply {
                 stackFromEnd = true
@@ -62,22 +61,11 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupSendButton() {
-        binding.buttonSend.setOnClickListener {
-            val message = binding.editTextMessage.text.toString()
+        binding.fabSend.setOnClickListener {
+            val message = binding.etMessage.text.toString()
             if (message.isNotBlank()) {
                 viewModel.sendMessage(message)
-                binding.editTextMessage.text?.clear()
-            }
-        }
-    }
-
-    private fun setupFloatingBubbleButton() {
-        binding.buttonFloatingBubble.setOnClickListener {
-            if (hasOverlayPermission()) {
-                FloatingBubbleService.show(requireContext())
-                Toast.makeText(requireContext(), "悬浮球已开启", Toast.LENGTH_SHORT).show()
-            } else {
-                requestOverlayPermission()
+                binding.etMessage.text?.clear()
             }
         }
     }
@@ -116,7 +104,7 @@ class ChatFragment : Fragment() {
                     viewModel.messages.collect { messages ->
                         messageAdapter.submitList(messages)
                         if (messages.isNotEmpty()) {
-                            binding.recyclerViewMessages.scrollToPosition(messages.size - 1)
+                            binding.recyclerView.scrollToPosition(messages.size - 1)
                         }
                     }
                 }
@@ -124,7 +112,7 @@ class ChatFragment : Fragment() {
                 launch {
                     viewModel.isLoading.collect { isLoading ->
                         binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
-                        binding.buttonSend.isEnabled = !isLoading
+                        binding.fabSend.isEnabled = !isLoading
                     }
                 }
 

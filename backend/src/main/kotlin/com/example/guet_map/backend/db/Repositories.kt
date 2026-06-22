@@ -22,6 +22,7 @@ class UserRepository {
                         email = row[Users.email],
                         passwordHash = row[Users.passwordHash],
                         nickname = row[Users.nickname],
+                        avatar = row[Users.avatar],
                         points = row[Users.points],
                         contributionCount = row[Users.contributionCount],
                         createdAt = parseDateTime(row[Users.createdAt]),
@@ -41,6 +42,7 @@ class UserRepository {
                         email = row[Users.email],
                         passwordHash = row[Users.passwordHash],
                         nickname = row[Users.nickname],
+                        avatar = row[Users.avatar],
                         points = row[Users.points],
                         contributionCount = row[Users.contributionCount],
                         createdAt = parseDateTime(row[Users.createdAt]),
@@ -59,6 +61,7 @@ class UserRepository {
                 it[Users.email] = email
                 it[Users.passwordHash] = passwordHash
                 it[Users.nickname] = nickname
+                it[Users.avatar] = null
                 it[Users.points] = 0
                 it[Users.contributionCount] = 0
                 it[Users.createdAt] = nowStr
@@ -70,11 +73,30 @@ class UserRepository {
                 email = email,
                 passwordHash = passwordHash,
                 nickname = nickname,
+                avatar = null,
                 points = 0,
                 contributionCount = 0,
                 createdAt = now,
                 updatedAt = now
             )
+        }
+    }
+    
+    fun updateAvatar(userId: Long, avatarPath: String?) {
+        transaction {
+            Users.update({ Users.id eq userId }) {
+                it[Users.avatar] = avatarPath
+                it[Users.updatedAt] = LocalDateTime.now().format(dateFormatter)
+            }
+        }
+    }
+
+    fun updateNickname(userId: Long, nickname: String) {
+        transaction {
+            Users.update({ Users.id eq userId }) {
+                it[Users.nickname] = nickname
+                it[Users.updatedAt] = LocalDateTime.now().format(dateFormatter)
+            }
         }
     }
     
@@ -319,3 +341,9 @@ class NotificationRepository {
         }
     }
 }
+
+// 导出社交相关的 Repository
+val friendRepository = FriendRepository()
+val messageRepository = MessageRepository()
+val postRepository = PostRepository()
+val userLocationRepository = UserLocationRepository()

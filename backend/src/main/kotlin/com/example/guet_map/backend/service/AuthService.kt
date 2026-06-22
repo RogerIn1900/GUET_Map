@@ -102,6 +102,7 @@ class AuthService(
             LoginResponse(
                 token = token,
                 nickname = user.nickname,
+                avatar = user.avatar,
                 points = user.points,
                 contributionCount = user.contributionCount,
                 userId = user.id
@@ -133,6 +134,7 @@ class AuthService(
             LoginResponse(
                 token = token,
                 nickname = user.nickname,
+                avatar = user.avatar,
                 points = user.points,
                 contributionCount = user.contributionCount,
                 userId = user.id

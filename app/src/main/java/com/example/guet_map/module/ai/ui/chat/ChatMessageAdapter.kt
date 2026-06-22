@@ -34,24 +34,24 @@ class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageVi
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(message: ChatMessage) {
-            binding.textViewMessage.text = message.content
-
-            // 根据角色设置样式
             when (message.role) {
                 ChatRole.USER -> {
-                    binding.textViewMessage.setBackgroundResource(
-                        android.R.color.holo_blue_light
-                    )
+                    binding.layoutSent.visibility = android.view.View.VISIBLE
+                    binding.layoutReceived.visibility = android.view.View.GONE
+                    binding.tvMessageSent.text = message.content
+                    binding.tvTimeSent.text = message.timestamp.toString()
                 }
                 ChatRole.ASSISTANT -> {
-                    binding.textViewMessage.setBackgroundResource(
-                        android.R.color.holo_green_light
-                    )
+                    binding.layoutSent.visibility = android.view.View.GONE
+                    binding.layoutReceived.visibility = android.view.View.VISIBLE
+                    binding.tvMessageReceived.text = message.content
+                    binding.tvTimeReceived.text = message.timestamp.toString()
                 }
                 ChatRole.SYSTEM -> {
-                    binding.textViewMessage.setBackgroundResource(
-                        android.R.color.darker_gray
-                    )
+                    binding.layoutSent.visibility = android.view.View.GONE
+                    binding.layoutReceived.visibility = android.view.View.VISIBLE
+                    binding.tvMessageReceived.text = message.content
+                    binding.tvTimeReceived.text = message.timestamp.toString()
                 }
             }
         }

@@ -41,6 +41,10 @@ class UserPrefs @Inject constructor(
         get() = prefs.getInt(KEY_CONTRIBUTION_COUNT, 0)
         set(value) = prefs.edit().putInt(KEY_CONTRIBUTION_COUNT, value).apply()
 
+    var avatar: String?
+        get() = prefs.getString(KEY_AVATAR, null)
+        set(value) = prefs.edit().putString(KEY_AVATAR, value).apply()
+
     var chatSessionId: String
         get() = prefs.getString(KEY_CHAT_SESSION_ID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_CHAT_SESSION_ID, value).apply()
@@ -72,6 +76,7 @@ class UserPrefs @Inject constructor(
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_CONTRIBUTION_COUNT = "contribution_count"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_AVATAR = "avatar"
         private const val KEY_CHAT_SESSION_ID = "chat_session_id"
         const val GUEST_USER_ID = "guest"
     }

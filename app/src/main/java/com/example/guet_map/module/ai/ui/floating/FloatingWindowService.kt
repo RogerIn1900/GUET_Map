@@ -263,7 +263,8 @@ class FloatingWindowService : Service(), LifecycleOwner {
     }
 
     private fun createDragTouchListener(): View.OnTouchListener {
-        return View.OnTouchListener { v, event ->
+        var touchListener: View.OnTouchListener? = null
+        touchListener = View.OnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = floatingParams?.x ?: 0
@@ -271,11 +272,11 @@ class FloatingWindowService : Service(), LifecycleOwner {
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
-                    activeTouchListener = this
+                    activeTouchListener = touchListener
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (activeTouchListener != this) return@OnTouchListener true
+                    if (activeTouchListener != touchListener) return@OnTouchListener true
                     if (!isDragging &&
                         (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
                                 kotlin.math.abs(event.rawY - initialTouchY) > 10)
@@ -298,7 +299,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (activeTouchListener == this) {
+                    if (activeTouchListener == touchListener) {
                         if (!isDragging) {
                             if (v == binding.titleBar) {
                                 binding.mainCard.performClick()
@@ -312,44 +313,50 @@ class FloatingWindowService : Service(), LifecycleOwner {
                 else -> false
             }
         }
+        return touchListener!!
     }
 
     private fun setupRootTouchForCollapsed() {
-        binding.root.setOnTouchListener { _, event ->
-            if (isExpanded) return@setOnTouchListener false
-            when (event.action) {
+        var touchListener: View.OnTouchListener? = null
+        touchListener = View.OnTouchListener { _, event ->
+            if (isExpanded) {
+                false
+            } else when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = floatingParams?.x ?: 0
                     initialY = floatingParams?.y ?: 0
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
-                    activeTouchListener = this
+                    activeTouchListener = touchListener
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (activeTouchListener != this) return@setOnTouchListener true
-                    if (!isDragging &&
-                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
-                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
-                    ) {
-                        isDragging = true
-                    }
-                    if (isDragging) {
-                        floatingParams?.let { params ->
-                            val displayMetrics = resources.displayMetrics
-                            val screenWidth = displayMetrics.widthPixels
-                            val currentRightEdge = screenWidth - params.x
-                            val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
-                            params.x = screenWidth - newRightEdge
-                            params.y = initialY + (event.rawY - initialTouchY).toInt()
-                            windowManager?.updateViewLayout(floatingView, params)
+                    if (activeTouchListener != touchListener) {
+                        true
+                    } else {
+                        if (!isDragging &&
+                            (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
+                                    kotlin.math.abs(event.rawY - initialTouchY) > 10)
+                        ) {
+                            isDragging = true
                         }
+                        if (isDragging) {
+                            floatingParams?.let { params ->
+                                val displayMetrics = resources.displayMetrics
+                                val screenWidth = displayMetrics.widthPixels
+                                val currentRightEdge = screenWidth - params.x
+                                val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
+                                params.x = screenWidth - newRightEdge
+                                params.y = initialY + (event.rawY - initialTouchY).toInt()
+                                windowManager?.updateViewLayout(floatingView, params)
+                            }
+                        }
+                        true
                     }
-                    true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (activeTouchListener == this) {
+                    if (activeTouchListener == touchListener) {
                         if (!isDragging) {
                             expandFromEdge()
                         }
@@ -361,6 +368,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
                 else -> false
             }
         }
+        binding.root.setOnTouchListener(touchListener)
     }
 
     private fun setupNavCardButtons() {

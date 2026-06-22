@@ -31,7 +31,8 @@ data class LoginUiState(
     val message: String? = null,
     val mode: LoginMode = LoginMode.LOGIN,
     val countdown: Int = 0,
-    val resetPasswordSuccess: Boolean = false
+    val resetPasswordSuccess: Boolean = false,
+    val loginSuccess: Boolean = false
 )
 
 @HiltViewModel
@@ -118,6 +119,7 @@ class LoginViewModel @Inject constructor(
                     is Resource.Success -> {
                         _uiState.value = refreshState().copy(
                             loading = false,
+                            loginSuccess = true,
                             message = "欢迎回来，${resource.data.nickname}"
                         )
                     }
@@ -143,6 +145,7 @@ class LoginViewModel @Inject constructor(
                     is Resource.Success -> {
                         _uiState.value = refreshState().copy(
                             loading = false,
+                            loginSuccess = true,
                             message = "注册成功，欢迎 ${resource.data.nickname}"
                         )
                     }

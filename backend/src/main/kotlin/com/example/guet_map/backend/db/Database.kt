@@ -31,6 +31,13 @@ object Database {
             SchemaUtils.create(Users)
             SchemaUtils.create(VerificationCodes)
             SchemaUtils.create(UserNotifications)
+            SchemaUtils.create(Friends)
+            SchemaUtils.create(FriendRequests)
+            SchemaUtils.create(Messages)
+            SchemaUtils.create(Posts)
+            SchemaUtils.create(PostComments)
+            SchemaUtils.create(PostLikes)
+            SchemaUtils.create(UserLocations)
             logger.info("Database tables created/verified successfully")
         }
     }

@@ -50,6 +50,10 @@
     <!-- 红色 -->
     <color name="red_500">#FFEF4444</color>
 
+    <!-- 绿色 -->
+    <color name="green_500">#FF4CAF50</color>
+    <color name="green_400">#FF66BB6A</color>
+
     <!-- 橙色文字 -->
     <color name="text_orange">#FFF57C00</color>
 </resources>

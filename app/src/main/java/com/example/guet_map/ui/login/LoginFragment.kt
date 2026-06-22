@@ -8,6 +8,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import com.example.guet_map.R
 import com.example.guet_map.databinding.FragmentLoginBinding
 import com.google.android.material.snackbar.Snackbar
@@ -21,6 +22,7 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
     private val binding get() = _binding!!
     private val viewModel: LoginViewModel by viewModels()
     private var lastMessage: String? = null
+    private var hasNavigated = false
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -87,10 +89,6 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
             } else {
                 switchToLogin()
             }
-        }
-
-        binding.btnWechatLogin.setOnClickListener {
-            Snackbar.make(binding.root, "微信登录暂未开放", Snackbar.LENGTH_SHORT).show()
         }
     }
 
@@ -166,6 +164,13 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
     private fun render(state: LoginUiState) {
         binding.progressBar.isVisible = state.loading
 
+        // 登录成功后跳转到主页
+        if (state.loginSuccess && !hasNavigated) {
+            hasNavigated = true
+            findNavController().navigate(R.id.nav_map)
+            return
+        }
+
         if (state.isLoggedIn) {
             renderLoggedIn(state)
         } else {
@@ -200,8 +205,6 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
         binding.cardLoggedInInfo.isVisible = true
         binding.btnLoginAction.text = "退出登录"
         binding.btnLoginAction.isVisible = true
-        binding.layoutDivider.isVisible = false
-        binding.btnWechatLogin.isVisible = false
         binding.layoutSwitchHint.isVisible = false
 
         binding.tvLoggedInInfo.text = "${state.nickname}\n${state.email}"
@@ -213,8 +216,6 @@ class LoginFragment : Fragment(R.layout.fragment_login) {
         binding.tilEmail.isVisible = true
         binding.cardLoggedInInfo.isVisible = false
         binding.btnLoginAction.isVisible = true
-        binding.layoutDivider.isVisible = true
-        binding.btnWechatLogin.isVisible = true
         binding.layoutSwitchHint.isVisible = true
 
         when (state.mode) {
