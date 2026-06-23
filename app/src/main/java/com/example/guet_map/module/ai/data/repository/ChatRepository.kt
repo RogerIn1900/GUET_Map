@@ -15,11 +15,15 @@ import javax.inject.Singleton
  */
 @Singleton
 class ChatRepository @Inject constructor(
-    private val chatMessageDao: ChatMessageDao
+    private val chatMessageDao: ChatMessageDao,
+    private val userPrefs: com.example.guet_map.data.UserPrefs
 ) {
 
+    private val activeUserId: String
+        get() = userPrefs.userId.ifBlank { com.example.guet_map.data.UserPrefs.GUEST_USER_ID }
+
     fun getMessages(sessionId: String): Flow<List<ChatMessage>> {
-        return chatMessageDao.getMessagesBySession(sessionId).map { entities ->
+        return chatMessageDao.getMessagesBySession(sessionId, activeUserId).map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -36,12 +40,12 @@ class ChatRepository @Inject constructor(
             content = content,
             locationId = locationId
         )
-        chatMessageDao.insertMessage(message.toEntity(sessionId))
+        chatMessageDao.insertMessage(message.toEntity(sessionId, activeUserId))
         return message
     }
 
     suspend fun deleteSession(sessionId: String) {
-        chatMessageDao.deleteSession(sessionId)
+        chatMessageDao.deleteSession(sessionId, activeUserId)
     }
 
     private fun ChatMessageEntity.toDomain() = ChatMessage(
@@ -52,12 +56,13 @@ class ChatRepository @Inject constructor(
         locationId = locationId
     )
 
-    private fun ChatMessage.toEntity(sessionId: String) = ChatMessageEntity(
+    private fun ChatMessage.toEntity(sessionId: String, userId: String) = ChatMessageEntity(
         id = id,
         role = role.name,
         content = content,
         timestamp = timestamp,
         locationId = locationId,
-        sessionId = sessionId
+        sessionId = sessionId,
+        userId = userId
     )
 }

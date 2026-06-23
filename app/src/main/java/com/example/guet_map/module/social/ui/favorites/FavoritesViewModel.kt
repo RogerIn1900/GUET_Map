@@ -2,6 +2,7 @@ package com.example.guet_map.module.social.ui.favorites
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.guet_map.data.UserPrefs
 import com.example.guet_map.module.social.data.model.Favorite
 import com.example.guet_map.module.social.data.model.FavoriteCategory
 import com.example.guet_map.module.social.domain.usecase.GetFavoritesUseCase
@@ -17,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
     private val getFavoritesUseCase: GetFavoritesUseCase,
-    private val removeFavoriteUseCase: RemoveFavoriteUseCase
+    private val removeFavoriteUseCase: RemoveFavoriteUseCase,
+    private val userPrefs: UserPrefs
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<FavoritesUiState>(FavoritesUiState.Loading)
@@ -29,8 +31,8 @@ class FavoritesViewModel @Inject constructor(
     private val _selectedCategory = MutableStateFlow(FavoriteCategory.ALL)
     val selectedCategory: StateFlow<FavoriteCategory> = _selectedCategory.asStateFlow()
 
-    // TODO: 从登录模块获取
-    private val userId = "current_user_id"
+    private val userId: String
+        get() = userPrefs.userId.ifBlank { UserPrefs.GUEST_USER_ID }
 
     init {
         loadFavorites()

@@ -2,6 +2,8 @@ package com.example.guet_map.network
 
 import com.example.guet_map.model.FavoriteRequest
 import com.example.guet_map.model.LoginRequest
+import com.example.guet_map.model.RegisterRequest
+import com.example.guet_map.model.SendCodeRequest
 import com.example.guet_map.util.CampusBuildingCatalog
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -24,6 +26,10 @@ class MockInterceptor : Interceptor {
     }
 
     private val favoritesByUser = ConcurrentHashMap<String, MutableList<String>>()
+    private val mockUsers = ConcurrentHashMap<String, MockUser>()
+    private val verificationCodes = ConcurrentHashMap<String, String>() // email -> code
+
+    private data class MockUser(val email: String, val password: String, val nickname: String)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -34,6 +40,8 @@ class MockInterceptor : Interceptor {
 
         val body = when {
             path == "/api/v1/auth/login" && method == "POST" -> handleLogin(request)
+            path == "/api/v1/auth/register" && method == "POST" -> handleRegister(request)
+            path == "/api/v1/auth/send-code" && method == "POST" -> handleSendCode(request)
             path == "/api/v1/categories" -> CATEGORIES_JSON
             path == "/api/v1/favorites" && method == "GET" -> favoritesJsonForUser(mockUserId)
             path.matches(Regex("/api/v1/favorites/[^/]+")) && method == "DELETE" -> {
@@ -82,23 +90,93 @@ class MockInterceptor : Interceptor {
 
     private fun handleLogin(request: okhttp3.Request): String {
         val login = readBody(request, LoginRequest::class.java)
-        val username = login?.username?.trim().orEmpty().ifBlank { "guest" }
-        MockSession.activeUserId = username
-        if (!favoritesByUser.containsKey(username)) {
-            favoritesByUser[username] = defaultFavoriteIdsForUser(username).toMutableList()
+        val email = login?.email?.trim().orEmpty()
+        val password = login?.password?.trim().orEmpty()
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
         }
-        val points = when (username) {
+        if (password.length < 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码至少6位"))
+        }
+        val userId = email.substringBefore("@").ifBlank { "guest" }
+        val mockUser = mockUsers[email.lowercase()]
+        if (mockUser != null && mockUser.password != password) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码错误"))
+        }
+        MockSession.activeUserId = userId
+        if (!favoritesByUser.containsKey(userId)) {
+            favoritesByUser[userId] = defaultFavoriteIdsForUser(userId).toMutableList()
+        }
+        val points = when (userId) {
             "guest" -> 0
-            else -> (username.hashCode() and 0x7FFF) % 50 + 5
+            else -> (userId.hashCode() and 0x7FFF) % 50 + 5
         }
         return gson.toJson(
             mapOf(
-                "token" to "mock_token_$username",
-                "nickname" to username,
+                "success" to true,
+                "token" to "mock_token_$userId",
+                "nickname" to (mockUser?.nickname ?: userId),
                 "points" to points,
-                "contributionCount" to 1
+                "contributionCount" to 1,
+                "email" to email
             )
         )
+    }
+
+    private fun handleRegister(request: okhttp3.Request): String {
+        val reg = readBody(request, RegisterRequest::class.java)
+        val email = reg?.email?.trim().orEmpty()
+        val password = reg?.password?.trim().orEmpty()
+        val code = reg?.code?.trim().orEmpty()
+        val nickname = reg?.nickname?.trim()?.ifBlank { email.substringBefore("@") } ?: email.substringBefore("@")
+        val userId = email.substringBefore("@").ifBlank { "user_${System.currentTimeMillis()}" }
+
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
+        }
+        if (password.length < 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "密码至少6位"))
+        }
+        if (code.length != 6) {
+            return gson.toJson(mapOf("success" to false, "message" to "请输入6位验证码"))
+        }
+        // 验证验证码（开发模式下接受任意6位数字，或使用生成的验证码）
+        val expectedCode = verificationCodes[email.lowercase()]
+        if (expectedCode != null && expectedCode != code && code != "123456") {
+            return gson.toJson(mapOf("success" to false, "message" to "验证码错误"))
+        }
+        val normalizedEmail = email.lowercase()
+        if (mockUsers.containsKey(normalizedEmail)) {
+            return gson.toJson(mapOf("success" to false, "message" to "该邮箱已注册"))
+        }
+        mockUsers[normalizedEmail] = MockUser(normalizedEmail, password, nickname)
+        MockSession.activeUserId = userId
+        favoritesByUser[userId] = mutableListOf()
+        verificationCodes.remove(normalizedEmail) // 注册成功后删除验证码
+        return gson.toJson(
+            mapOf(
+                "success" to true,
+                "token" to "mock_token_$userId",
+                "nickname" to nickname,
+                "points" to 0,
+                "contributionCount" to 0,
+                "email" to email
+            )
+        )
+    }
+
+    private fun handleSendCode(request: okhttp3.Request): String {
+        val sendCode = readBody(request, SendCodeRequest::class.java)
+        val email = sendCode?.email?.trim()?.lowercase().orEmpty()
+        if (email.isBlank()) {
+            return gson.toJson(mapOf("success" to false, "message" to "邮箱不能为空"))
+        }
+        // 生成6位验证码
+        val code = (100000..999999).random().toString()
+        verificationCodes[email] = code
+        // 开发模式下直接返回成功，验证码会在日志中输出
+        android.util.Log.d("MockInterceptor", "验证码 for $email: $code")
+        return gson.toJson(mapOf("success" to true, "message" to "验证码已发送"))
     }
 
     private fun defaultFavoriteIdsForUser(username: String): List<String> = when (username) {

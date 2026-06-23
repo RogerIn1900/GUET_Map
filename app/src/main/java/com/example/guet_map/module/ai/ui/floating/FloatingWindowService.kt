@@ -16,17 +16,21 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.guet_map.R
+import com.example.guet_map.databinding.ItemTimetableNavCardBinding
 import com.example.guet_map.databinding.LayoutFloatingWindowBinding
 import com.example.guet_map.model.Resource
 import com.example.guet_map.module.ai.data.model.ChatMessage
 import com.example.guet_map.module.ai.data.model.ChatRole
 import com.example.guet_map.module.ai.data.repository.ChatRepository
+import com.example.guet_map.module.ai.domain.schedule.TimetableScheduleManager.NavigationTiming
 import com.example.guet_map.module.ai.domain.service.AiService
 import com.example.guet_map.module.ai.ui.chat.ChatMessageAdapter
 import com.example.guet_map.module.ai.ui.chat.ChatUiEvent
@@ -46,7 +50,10 @@ import javax.inject.Inject
 
 /**
  * AI 悬浮窗服务
- * 提供悬浮窗形式的 AI 助手界面
+ * 提供悬浮窗形式的 AI 助手界面，支持：
+ * - 靠边收起（收起时仅显示窄竖条，展开时显示完整窗口）
+ * - 课表导航建议卡片（悬浮窗消息列表顶部）
+ * - 课表导入入口
  */
 @AndroidEntryPoint
 class FloatingWindowService : Service(), LifecycleOwner {
@@ -57,6 +64,9 @@ class FloatingWindowService : Service(), LifecycleOwner {
 
     private var _binding: LayoutFloatingWindowBinding? = null
     private val binding get() = _binding!!
+
+    private var _navCardBinding: ItemTimetableNavCardBinding? = null
+    private val navCardBinding get() = _navCardBinding!!
 
     private lateinit var lifecycleRegistry: LifecycleRegistry
 
@@ -79,7 +89,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
     private val _events = MutableSharedFlow<ChatUiEvent>()
     private val events: SharedFlow<ChatUiEvent> = _events.asSharedFlow()
 
-    // 使用固定的会话ID，存储在 SharedPreferences 中以保持会话持久化
+    // SharedPreferences 会话持久化
     private val prefs by lazy { getSharedPreferences("floating_window_prefs", Context.MODE_PRIVATE) }
     private val sessionId: String
         get() {
@@ -91,18 +101,30 @@ class FloatingWindowService : Service(), LifecycleOwner {
             return id
         }
 
+    // 窗口状态
     private var isExpanded = true
-    private val collapsedHeight = 120 // dp
-    private val expandedHeight = 400 // dp
+    private var isPinned = false
+    private var pinnedSide = Gravity.END
 
-    // 触摸事件相关
+    // 展开/收起尺寸（dp）
+    private val expandedWidthDp = 280
+    private val expandedHeightDp = 400
+    private val collapsedWidthDp = 48
+    private val collapsedHeightDp = 200
+
+    // 触摸事件
     private var initialX = 0
     private var initialY = 0
     private var initialTouchX = 0f
     private var initialTouchY = 0f
+    private var isDragging = false
+    private var activeTouchListener: View.OnTouchListener? = null
 
     // 是否正在编辑输入框
     private var isInputFocused = false
+
+    // 当前显示的导航卡片
+    private var currentNavCard: ChatUiEvent.ShowTimetableNavigationCard? = null
 
     override val lifecycle: Lifecycle
         get() = lifecycleRegistry
@@ -111,15 +133,12 @@ class FloatingWindowService : Service(), LifecycleOwner {
         super.onCreate()
         lifecycleRegistry = LifecycleRegistry(this)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
-
-        // 创建通知渠道
         createNotificationChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
 
-        // 创建前台通知
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AI 助手运行中")
             .setContentText("点击可展开悬浮窗口")
@@ -137,8 +156,14 @@ class FloatingWindowService : Service(), LifecycleOwner {
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        _binding = LayoutFloatingWindowBinding.inflate(LayoutInflater.from(this))
+        // 使用 ContextThemeWrapper 确保 Material 主题可用（修复 MaterialButton 崩溃）
+        _binding = LayoutFloatingWindowBinding.inflate(
+            LayoutInflater.from(ContextThemeWrapper(this, R.style.Theme_GUET_Map))
+        )
         floatingView = binding.root
+
+        // 导航卡片 binding（通过 include 的 id 访问）
+        _navCardBinding = ItemTimetableNavCardBinding.bind(binding.navCard.root)
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -151,17 +176,20 @@ class FloatingWindowService : Service(), LifecycleOwner {
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
 
+        val expW = dpToPx(expandedWidthDp)
+        val expH = dpToPx(expandedHeightDp)
+
         floatingParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            dpToPx(expandedHeight),
-            screenWidth / 2 - dpToPx(140),
+            expW,
+            expH,
+            screenWidth - expW - dpToPx(16),
             screenHeight / 3,
             layoutFlag,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.END
             windowAnimations = android.R.style.Animation_Dialog
         }
 
@@ -204,12 +232,17 @@ class FloatingWindowService : Service(), LifecycleOwner {
             stopSelf()
         }
 
-        // 最小化/展开按钮
+        // 最小化/收起按钮
         binding.buttonMinimize.setOnClickListener {
-            toggleWindowSize()
+            collapseToEdge()
         }
 
-        // 输入框点击 - 请求焦点并显示输入法
+        // 课表导入按钮
+        binding.buttonImportTimetable.setOnClickListener {
+            openTimetableImport()
+        }
+
+        // 输入框焦点
         binding.editTextMessage.setOnFocusChangeListener { _, hasFocus ->
             isInputFocused = hasFocus
             updateWindowFocusability()
@@ -219,40 +252,312 @@ class FloatingWindowService : Service(), LifecycleOwner {
             requestInputFocus()
         }
 
-        // 标题栏拖动功能
-        binding.titleBar.setOnTouchListener { _, event ->
+        // 标题栏拖动
+        binding.titleBar.setOnTouchListener(createDragTouchListener())
+
+        // 收起状态下把手区域点击/拖动展开
+        setupRootTouchForCollapsed()
+
+        // 导航卡片按钮
+        setupNavCardButtons()
+    }
+
+    private fun createDragTouchListener(): View.OnTouchListener {
+        var touchListener: View.OnTouchListener? = null
+        touchListener = View.OnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = floatingParams?.x ?: 0
                     initialY = floatingParams?.y ?: 0
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    isDragging = false
+                    activeTouchListener = touchListener
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    floatingParams?.let { params ->
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager?.updateViewLayout(floatingView, params)
+                    if (activeTouchListener != touchListener) return@OnTouchListener true
+                    if (!isDragging &&
+                        (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
+                                kotlin.math.abs(event.rawY - initialTouchY) > 10)
+                    ) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        floatingParams?.let { params ->
+                            val displayMetrics = resources.displayMetrics
+                            val screenWidth = displayMetrics.widthPixels
+                            // x 坐标：gravity=END(右对齐)，params.x 是距离屏幕右边缘
+                            // rawX 是距离屏幕左边缘，需要转换
+                            val currentRightEdge = screenWidth - params.x
+                            val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
+                            params.x = screenWidth - newRightEdge
+                            params.y = initialY + (event.rawY - initialTouchY).toInt()
+                            windowManager?.updateViewLayout(floatingView, params)
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (activeTouchListener == touchListener) {
+                        if (!isDragging) {
+                            if (v == binding.titleBar) {
+                                binding.mainCard.performClick()
+                            }
+                        }
+                        isDragging = false
+                        activeTouchListener = null
                     }
                     true
                 }
                 else -> false
             }
         }
+        return touchListener!!
+    }
+
+    private fun setupRootTouchForCollapsed() {
+        var touchListener: View.OnTouchListener? = null
+        touchListener = View.OnTouchListener { _, event ->
+            if (isExpanded) {
+                false
+            } else when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = floatingParams?.x ?: 0
+                    initialY = floatingParams?.y ?: 0
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
+                    activeTouchListener = touchListener
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (activeTouchListener != touchListener) {
+                        true
+                    } else {
+                        if (!isDragging &&
+                            (kotlin.math.abs(event.rawX - initialTouchX) > 10 ||
+                                    kotlin.math.abs(event.rawY - initialTouchY) > 10)
+                        ) {
+                            isDragging = true
+                        }
+                        if (isDragging) {
+                            floatingParams?.let { params ->
+                                val displayMetrics = resources.displayMetrics
+                                val screenWidth = displayMetrics.widthPixels
+                                val currentRightEdge = screenWidth - params.x
+                                val newRightEdge = (currentRightEdge + event.rawX - initialTouchX).toInt()
+                                params.x = screenWidth - newRightEdge
+                                params.y = initialY + (event.rawY - initialTouchY).toInt()
+                                windowManager?.updateViewLayout(floatingView, params)
+                            }
+                        }
+                        true
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (activeTouchListener == touchListener) {
+                        if (!isDragging) {
+                            expandFromEdge()
+                        }
+                        isDragging = false
+                        activeTouchListener = null
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+        binding.root.setOnTouchListener(touchListener)
+    }
+
+    private fun setupNavCardButtons() {
+        navCardBinding.buttonConfirm.setOnClickListener {
+            val card = currentNavCard ?: return@setOnClickListener
+            hideNavCard()
+            // 通过广播通知 Activity，由 Activity 处理导航
+            card.targetLocationId?.let { locId ->
+                val intent = Intent(ACTION_TIMETABLE_NAVIGATE).apply {
+                    putExtra(EXTRA_LOCATION_ID, locId)
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+            }
+        }
+
+        navCardBinding.buttonCancel.setOnClickListener {
+            hideNavCard()
+            currentNavCard = null
+        }
     }
 
     /**
-     * 请求输入框焦点并显示输入法
+     * 显示课表导航建议卡片
      */
+    private fun showNavCard(event: ChatUiEvent.ShowTimetableNavigationCard) {
+        currentNavCard = event
+
+        navCardBinding.textCourseName.text = event.courseName
+        navCardBinding.textClassroom.text = event.classroomName
+        navCardBinding.textDayPeriod.text = "${event.dayOfWeek} ${event.formatTime}"
+        navCardBinding.textDepartureTime.text = event.departureTime
+        navCardBinding.textArriveTime.text = event.arriveTime
+        navCardBinding.textWalkingMinutes.text = "${event.walkingMinutes}分钟"
+        navCardBinding.textWarning.text = event.warningMessage
+
+        // 时机标签
+        val timing = try {
+            NavigationTiming.valueOf(event.timing)
+        } catch (_: Exception) {
+            NavigationTiming.Idle
+        }
+        val (tagText, tagColor) = when (timing) {
+            NavigationTiming.BeforeClass30Min -> "即将上课" to "#F57C00"
+            NavigationTiming.DuringClass -> "上课中" to "#388E3C"
+            NavigationTiming.AfterClass -> "下课了" to "#1976D2"
+            NavigationTiming.Idle -> "暂无课程" to "#9E9E9E"
+        } ?: ("暂无课程" to "#9E9E9E")
+        navCardBinding.textTiming.text = tagText
+        navCardBinding.textTiming.background.setTint(android.graphics.Color.parseColor(tagColor))
+
+        binding.navCard.root.visibility = View.VISIBLE
+
+        val itemCount = messageAdapter.itemCount
+        if (itemCount > 0) {
+            binding.recyclerViewMessages.smoothScrollToPosition(itemCount - 1)
+        }
+    }
+
+    /**
+     * 隐藏导航卡片
+     */
+    private fun hideNavCard() {
+        currentNavCard = null
+        binding.navCard.root.visibility = View.GONE
+    }
+
+    /**
+     * 收起悬浮窗到屏幕边缘（窄竖条）
+     */
+    private fun collapseToEdge() {
+        if (!isExpanded) return
+        isExpanded = false
+
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+
+        val targetW = dpToPx(collapsedWidthDp)
+        val targetH = dpToPx(collapsedHeightDp)
+        val targetX = if (pinnedSide == Gravity.END) {
+            screenWidth - targetW - dpToPx(4)
+        } else {
+            dpToPx(4)
+        }
+        val targetY = floatingParams?.y ?: (screenHeight / 3)
+
+        animateWindowResize(
+            toWidth = targetW,
+            toHeight = targetH,
+            toX = targetX,
+            toY = targetY
+        ) {
+            binding.mainCardContent.visibility = View.GONE
+            binding.root.setBackgroundResource(android.R.drawable.edit_text)
+            binding.root.setBackgroundColor(0xE86200EE.toInt())
+        }
+    }
+
+    /**
+     * 从边缘展开悬浮窗
+     */
+    private fun expandFromEdge() {
+        if (isExpanded) return
+        isExpanded = true
+
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+
+        val targetW = dpToPx(expandedWidthDp)
+        val targetH = dpToPx(expandedHeightDp)
+        val targetX = if (pinnedSide == Gravity.END) {
+            screenWidth - targetW - dpToPx(16)
+        } else {
+            dpToPx(16)
+        }
+        val targetY = floatingParams?.y ?: (displayMetrics.heightPixels / 3)
+
+        binding.root.setBackgroundColor(0x00000000)
+        binding.mainCardContent.visibility = View.VISIBLE
+
+        animateWindowResize(
+            toWidth = targetW,
+            toHeight = targetH,
+            toX = targetX,
+            toY = targetY,
+            onComplete = {
+                binding.buttonMinimize.setImageResource(android.R.drawable.arrow_down_float)
+            }
+        )
+    }
+
+    private fun animateWindowResize(
+        toWidth: Int,
+        toHeight: Int,
+        toX: Int,
+        toY: Int,
+        onComplete: (() -> Unit)? = null
+    ) {
+        val params = floatingParams ?: return
+        val fromWidth = params.width
+        val fromHeight = params.height
+        val fromX = params.x
+        val fromY = params.y
+
+        val widthAnim = android.animation.ValueAnimator.ofInt(fromWidth, toWidth)
+        val heightAnim = android.animation.ValueAnimator.ofInt(fromHeight, toHeight)
+        val xAnim = android.animation.ValueAnimator.ofInt(fromX, toX)
+        val yAnim = android.animation.ValueAnimator.ofInt(fromY, toY)
+
+        widthAnim.duration = 200
+        heightAnim.duration = 200
+        xAnim.duration = 200
+        yAnim.duration = 200
+
+        widthAnim.addUpdateListener {
+            params.width = it.animatedValue as Int
+            windowManager?.updateViewLayout(floatingView, params)
+        }
+        heightAnim.addUpdateListener {
+            params.height = it.animatedValue as Int
+            windowManager?.updateViewLayout(floatingView, params)
+        }
+        xAnim.addUpdateListener {
+            params.x = it.animatedValue as Int
+            windowManager?.updateViewLayout(floatingView, params)
+        }
+        yAnim.addUpdateListener {
+            params.y = it.animatedValue as Int
+            windowManager?.updateViewLayout(floatingView, params)
+        }
+
+        xAnim.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                onComplete?.invoke()
+            }
+        })
+
+        widthAnim.start()
+        heightAnim.start()
+        xAnim.start()
+        yAnim.start()
+    }
+
     private fun requestInputFocus() {
         binding.editTextMessage.requestFocus()
         showInputMethod()
     }
 
-    /**
-     * 显示输入法
-     */
     private fun showInputMethod() {
         val imm = getSystemService<InputMethodManager>()
         imm?.showSoftInput(binding.editTextMessage, InputMethodManager.SHOW_IMPLICIT)
@@ -260,9 +565,6 @@ class FloatingWindowService : Service(), LifecycleOwner {
         updateWindowFocusability()
     }
 
-    /**
-     * 隐藏输入法
-     */
     private fun hideInputMethod() {
         val imm = getSystemService<InputMethodManager>()
         imm?.hideSoftInputFromWindow(binding.editTextMessage.windowToken, 0)
@@ -271,17 +573,11 @@ class FloatingWindowService : Service(), LifecycleOwner {
         updateWindowFocusability()
     }
 
-    /**
-     * 根据输入框焦点状态更新窗口焦点能力
-     * 当需要输入时，移除 FLAG_NOT_FOCUSABLE 以允许输入法显示
-     */
     private fun updateWindowFocusability() {
         floatingParams?.let { params ->
             val newFlags = if (isInputFocused) {
-                // 需要输入时，移除 FLAG_NOT_FOCUSABLE
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             } else {
-                // 不需要输入时，保持不可获取焦点
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             }
@@ -292,16 +588,10 @@ class FloatingWindowService : Service(), LifecycleOwner {
         }
     }
 
-    /**
-     * 加载聊天历史记录
-     * 只在初始化时加载一次，之后由 Flow 自动同步
-     */
     private fun loadChatHistory() {
         serviceScope.launch {
             try {
-                // 只加载一次历史记录
-                val history = chatRepository.getMessages(sessionId)
-                // 通过 observeState 中的 Flow 收集来更新 UI
+                chatRepository.getMessages(sessionId)
             } catch (e: Exception) {
                 android.util.Log.e("FloatingWindowService", "加载历史记录失败", e)
             }
@@ -309,7 +599,6 @@ class FloatingWindowService : Service(), LifecycleOwner {
     }
 
     private fun observeState() {
-        // 从数据库 Flow 收集消息，实现自动同步
         serviceScope.launch {
             chatRepository.getMessages(sessionId).collect { msgs ->
                 messageAdapter.submitList(msgs) {
@@ -332,9 +621,6 @@ class FloatingWindowService : Service(), LifecycleOwner {
         }
     }
 
-    /**
-     * 滚动到消息列表底部
-     */
     private fun scrollToBottom() {
         val itemCount = messageAdapter.itemCount
         if (itemCount > 0) {
@@ -345,34 +631,19 @@ class FloatingWindowService : Service(), LifecycleOwner {
     private fun sendMessage(content: String) {
         if (content.isBlank() || _isLoading.value) return
 
-        android.util.Log.d("FloatingWindowService", "sendMessage called: $content")
-        android.util.Log.d("FloatingWindowService", "aiService initialized: ${::aiService.isInitialized}")
-        android.util.Log.d("FloatingWindowService", "chatRepository initialized: ${::chatRepository.isInitialized}")
-
         serviceScope.launch {
             _isLoading.value = true
 
-            // AI 服务会处理用户消息的保存，不要重复保存
-            // 调用 AI 服务
             try {
-                android.util.Log.d("FloatingWindowService", "Calling aiService.sendMessage...")
                 val result = aiService.sendMessage(sessionId, content)
-                android.util.Log.d("FloatingWindowService", "aiService.sendMessage result: $result")
                 when (result) {
-                    is Resource.Success -> {
-                        // AI 回复已由 aiService 保存到数据库，Flow 会自动更新 UI
-                        // 这里不需要再次保存
-                    }
+                    is Resource.Success -> { /* AI 回复由 Flow 自动同步 */ }
                     is Resource.Error -> {
-                        android.util.Log.e("FloatingWindowService", "AI Error: ${result.message}")
                         _events.emit(ChatUiEvent.ShowMessage("发送失败: ${result.message}"))
                     }
-                    is Resource.Loading -> {
-                        // 已在加载中
-                    }
+                    is Resource.Loading -> { /* 已在加载中 */ }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("FloatingWindowService", "Exception: ", e)
                 _events.emit(ChatUiEvent.ShowMessage("发送失败: ${e.message}"))
             }
 
@@ -408,34 +679,28 @@ class FloatingWindowService : Service(), LifecycleOwner {
                     Toast.LENGTH_SHORT
                 ).show()
             }
+            is ChatUiEvent.ShowTimetableNavigationCard -> {
+                showNavCard(event)
+            }
+            is ChatUiEvent.ShowTimetableNavigation -> {
+                Toast.makeText(
+                    this,
+                    "课表导航：${event.courseName} @ ${event.classroomName}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            ChatUiEvent.TimetableNavigationConfirmed,
+            ChatUiEvent.TimetableNavigationCancelled -> Unit
         }
     }
 
-    private fun toggleWindowSize() {
-        val targetHeight = if (isExpanded) dpToPx(collapsedHeight) else dpToPx(expandedHeight)
-        val currentHeight = floatingParams?.height ?: dpToPx(expandedHeight)
-
-        val animator = android.animation.ValueAnimator.ofInt(currentHeight, targetHeight)
-        animator.duration = 200
-        animator.addUpdateListener { animation ->
-            floatingParams?.let { params ->
-                params.height = animation.animatedValue as Int
-                windowManager?.updateViewLayout(floatingView, params)
-            }
-        }
-        animator.start()
-
-        isExpanded = !isExpanded
-
-        // 切换图标
-        binding.buttonMinimize.setImageResource(
-            if (isExpanded) android.R.drawable.arrow_down_float
-            else android.R.drawable.arrow_up_float
-        )
-
-        // 隐藏/显示内容
-        binding.recyclerViewMessages.visibility = if (isExpanded) View.VISIBLE else View.GONE
-        binding.inputLayout.visibility = if (isExpanded) View.VISIBLE else View.GONE
+    /**
+     * 打开课表导入页面（通过广播通知 Activity）
+     */
+    private fun openTimetableImport() {
+        val intent = Intent(ACTION_OPEN_TIMETABLE_IMPORT)
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -446,10 +711,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
         super.onDestroy()
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         serviceScope.cancel()
-
-        // 隐藏输入法
         hideInputMethod()
-
         floatingView?.let {
             try {
                 windowManager?.removeView(it)
@@ -457,6 +719,7 @@ class FloatingWindowService : Service(), LifecycleOwner {
         }
         floatingView = null
         _binding = null
+        _navCardBinding = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -465,6 +728,9 @@ class FloatingWindowService : Service(), LifecycleOwner {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "floating_window_channel"
         private const val KEY_SESSION_ID = "chat_session_id"
+        const val ACTION_OPEN_TIMETABLE_IMPORT = "com.example.guet_map.ACTION_OPEN_TIMETABLE_IMPORT"
+        const val ACTION_TIMETABLE_NAVIGATE = "com.example.guet_map.ACTION_TIMETABLE_NAVIGATE"
+        const val EXTRA_LOCATION_ID = "extra_location_id"
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingWindowService::class.java)
@@ -481,15 +747,15 @@ class FloatingWindowService : Service(), LifecycleOwner {
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = android.app.NotificationChannel(
+                val channel = NotificationChannel(
                     CHANNEL_ID,
                     "AI 助手",
-                    android.app.NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_LOW
                 ).apply {
                     description = "悬浮窗 AI 助手通知"
                     setShowBadge(false)
                 }
-                val notificationManager = context.getSystemService(android.app.NotificationManager::class.java)
+                val notificationManager = context.getSystemService(NotificationManager::class.java)
                 notificationManager.createNotificationChannel(channel)
             }
         }

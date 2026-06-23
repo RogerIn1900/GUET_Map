@@ -1,5 +1,9 @@
 package com.example.guet_map
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -14,6 +18,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.example.guet_map.R
 import com.example.guet_map.databinding.ActivityMainBinding
 import com.example.guet_map.module.ai.ui.chat.ChatFragment
+import com.example.guet_map.module.ai.ui.floating.FloatingWindowService
 import com.example.guet_map.ui.MainNavViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -24,6 +29,32 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val mainNavViewModel: MainNavViewModel by viewModels()
+
+    // 接收来自 FloatingWindowService 的广播
+    private val floatingWindowReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                FloatingWindowService.ACTION_OPEN_TIMETABLE_IMPORT -> {
+                    // 导航到课表导入页面
+                    try {
+                        val navHostFragment = supportFragmentManager
+                            .findFragmentById(R.id.navHostFragment) as NavHostFragment
+                        val navController = navHostFragment.navController
+                        navController.navigate(R.id.nav_timetable_import)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "无法打开课表导入页面", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                FloatingWindowService.ACTION_TIMETABLE_NAVIGATE -> {
+                    val locationId = intent.getStringExtra(FloatingWindowService.EXTRA_LOCATION_ID)
+                    if (locationId != null) {
+                        mainNavViewModel.openLocationOnMap(locationId)
+                        Toast.makeText(context, "正在导航到目标教室", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         applyWindowInsets()
         setupNavigation()
         setupAiActionListener()
+        registerFloatingWindowReceiver()
 
         // 处理从悬浮球打开 AI 聊天
         if (intent.getBooleanExtra("open_ai_chat", false)) {
@@ -164,5 +196,24 @@ class MainActivity : AppCompatActivity() {
             binding.bottomNavigation.setPadding(0, 0, 0, systemBars.bottom)
             insets
         }
+    }
+
+    private fun registerFloatingWindowReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(FloatingWindowService.ACTION_OPEN_TIMETABLE_IMPORT)
+            addAction(FloatingWindowService.ACTION_TIMETABLE_NAVIGATE)
+        }
+        registerReceiver(floatingWindowReceiver, filter, RECEIVER_NOT_EXPORTED)
+    }
+
+    private fun unregisterFloatingWindowReceiver() {
+        try {
+            unregisterReceiver(floatingWindowReceiver)
+        } catch (_: Exception) {}
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterFloatingWindowReceiver()
     }
 }

@@ -9,12 +9,12 @@
         android:icon="@drawable/ic_explore"
         android:title="" />
     <item
-        android:id="@+id/nav_favorites"
-        android:icon="@drawable/ic_favorites"
-        android:title="" />
-    <item
         android:id="@+id/nav_contribute"
         android:icon="@drawable/ic_add"
+        android:title="" />
+    <item
+        android:id="@+id/nav_discover"
+        android:icon="@drawable/ic_discover"
         android:title="" />
     <item
         android:id="@+id/nav_notifications"
