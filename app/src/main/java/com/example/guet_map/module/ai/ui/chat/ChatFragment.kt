@@ -48,6 +48,7 @@ class ChatFragment : Fragment() {
         setupRecyclerView()
         setupSendButton()
         setupFloatingBubbleButton()
+        setupSettingsButton()
         observeState()
     }
 
@@ -79,6 +80,18 @@ class ChatFragment : Fragment() {
             } else {
                 requestOverlayPermission()
             }
+        }
+    }
+
+    private fun setupSettingsButton() {
+        binding.buttonSettings.setOnClickListener {
+            parentFragmentManager.beginTransaction()
+                .replace(
+                    com.example.guet_map.R.id.navHostFragment,
+                    com.example.guet_map.module.ai.ui.settings.ApiKeySettingsFragment.newInstance()
+                )
+                .addToBackStack(null)
+                .commit()
         }
     }
 

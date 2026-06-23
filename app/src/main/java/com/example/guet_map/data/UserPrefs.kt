@@ -38,6 +38,19 @@ class UserPrefs @Inject constructor(
         get() = prefs.getInt(KEY_CONTRIBUTION_COUNT, 0)
         set(value) = prefs.edit().putInt(KEY_CONTRIBUTION_COUNT, value).apply()
 
+    var avatar: String?
+        get() = prefs.getString(KEY_AVATAR, null)
+        set(value) = prefs.edit().putString(KEY_AVATAR, value).apply()
+
+    var chatSessionId: String
+        get() = prefs.getString(KEY_CHAT_SESSION_ID, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_CHAT_SESSION_ID, value).apply()
+
+    /** DeepSeek API Key，优先使用此值，BuildConfig 中的 Key 作为默认值兜底 */
+    var deepSeekApiKey: String
+        get() = prefs.getString(KEY_DEEPSEEK_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_DEEPSEEK_API_KEY, value).apply()
+
     fun addPoints(earned: Int) {
         points += earned
     }
@@ -63,6 +76,9 @@ class UserPrefs @Inject constructor(
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_CONTRIBUTION_COUNT = "contribution_count"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_AVATAR = "avatar"
+        private const val KEY_CHAT_SESSION_ID = "chat_session_id"
+        private const val KEY_DEEPSEEK_API_KEY = "deepseek_api_key"
         const val GUEST_USER_ID = "guest"
     }
 }

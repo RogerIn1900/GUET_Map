@@ -26,6 +26,7 @@ val jdkHome = when {
     }
     isMac -> {
         val macPaths = listOf(
+            "/Library/Java/JavaVirtualMachines/jdk-23.jdk/Contents/Home",
             "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
             "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
             "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home",
@@ -36,7 +37,7 @@ val jdkHome = when {
             "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
         )
         macPaths.firstOrNull { java.io.File(it).exists() }
-            ?: "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
+            ?: "/Library/Java/JavaVirtualMachines/jdk-23.jdk/Contents/Home"
     }
     isLinux -> {
         val linuxPaths = listOf(

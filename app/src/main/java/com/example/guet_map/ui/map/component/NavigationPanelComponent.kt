@@ -15,7 +15,7 @@ import com.example.guet_map.model.WalkRouteInfo
 
 /**
  * 导航面板组件
- * 负责：导航面板显示、路线信息展示、外部导航跳转
+ * 负责：导航面板显示、路线信息展示、外部导航跳转、循迹状态更新
  */
 class NavigationPanelComponent(
     private val context: Context,
@@ -27,6 +27,7 @@ class NavigationPanelComponent(
 
     var onCloseNavigation: (() -> Unit)? = null
     var onStartNavigation: ((Location) -> Unit)? = null
+    var onReroute: (() -> Unit)? = null
 
     init {
         inflate()
@@ -59,6 +60,7 @@ class NavigationPanelComponent(
 
         binding?.apply {
             cardNavigationPanel.visibility = View.VISIBLE
+            tvNextStep.text = context.getString(R.string.route_planning)
         }
     }
 
@@ -75,13 +77,44 @@ class NavigationPanelComponent(
             }
             val unitText = if (route.distanceMeters >= 1000) "公里" else "米"
 
-            // tvRouteDistance 显示距离（不包含单位）
             tvRouteDistance.text = distanceText
-            // 下方单位显示公里或米
-            tvRouteDuration.text = unitText
+            tvRouteDuration.text = "${(route.durationSeconds / 60).coerceAtLeast(1)}"
+            tvNextStep.text = "预计步行 ${(route.durationSeconds / 60).coerceAtLeast(1)} 分钟"
+        }
+    }
 
-            val minutes = (route.durationSeconds / 60).coerceAtLeast(1)
-            tvNextStep.text = "预计步行 $minutes 分钟"
+    /**
+     * 实时更新循迹数据（GPS 位置更新时调用）
+     */
+    fun updateTrackingProgress(remainingDistance: Int, remainingTime: Int, stepHint: String) {
+        binding?.apply {
+            val distText = if (remainingDistance >= 1000) {
+                String.format("%.1f公里", remainingDistance / 1000f)
+            } else {
+                "${remainingDistance}米"
+            }
+            tvRouteDistance.text = remainingDistance.toString()
+            tvNextStep.text = stepHint
+        }
+    }
+
+    /**
+     * 显示偏航提示
+     */
+    fun showDeviationAlert() {
+        binding?.apply {
+            tvNextStep.text = "您已偏离路线，正在重新规划…"
+        }
+    }
+
+    /**
+     * 到达目的地
+     */
+    fun showArrival() {
+        binding?.apply {
+            tvNextStep.text = "已到达目的地！"
+            tvRouteDistance.text = "0"
+            tvRouteDuration.text = "到达"
         }
     }
 

@@ -19,7 +19,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "BASE_URL", "\"https://api.guetmap.example.com/\"")
-        buildConfigField("String", "DEEPSEEK_API_KEY", "\"\"")
+        buildConfigField("String", "DEEPSEEK_API_KEY", "\"sk-de42362c59d349daa0e55303207203ff\"")
 
         ndk {
             // 高德 3D SDK 仅提供 ARM 原生库，x86_64 模拟器通过 libndk_translation 翻译运行
@@ -100,8 +100,8 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
-    // 高德合包：3D 地图 + 定位 + 搜索（PoiSearch），避免 3dmap 与 search 单独引入时的重复类
-    implementation("com.amap.api:3dmap-location-search:latest.integration")
+    // 高德合包（官方 combined artifact，避免 3dmap / location / search 三 JAR 重叠类问题）
+    implementation(libs.amap.combined)
 
     // Image loading
     implementation(libs.coil)

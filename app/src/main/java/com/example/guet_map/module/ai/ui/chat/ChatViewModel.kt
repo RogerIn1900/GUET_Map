@@ -2,10 +2,13 @@ package com.example.guet_map.module.ai.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.guet_map.data.UserPrefs
 import com.example.guet_map.model.Resource
 import com.example.guet_map.module.ai.data.model.AiAction
 import com.example.guet_map.module.ai.data.model.AiResponse
 import com.example.guet_map.module.ai.data.model.ChatMessage
+import com.example.guet_map.module.ai.data.model.ChatRole
+import com.example.guet_map.module.ai.data.remote.DeepSeekConfigProvider
 import com.example.guet_map.module.ai.domain.usecase.GetChatHistoryUseCase
 import com.example.guet_map.module.ai.domain.usecase.SendMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +28,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sendMessageUseCase: SendMessageUseCase,
-    private val getChatHistoryUseCase: GetChatHistoryUseCase
+    private val getChatHistoryUseCase: GetChatHistoryUseCase,
+    private val deepSeekConfigProvider: DeepSeekConfigProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Loading)
@@ -42,6 +46,9 @@ class ChatViewModel @Inject constructor(
 
     // 对话会话 ID
     private val sessionId = UUID.randomUUID().toString()
+
+    val isApiKeyConfigured: Boolean
+        get() = deepSeekConfigProvider.isConfigured()
 
     init {
         loadChatHistory()
@@ -72,7 +79,10 @@ class ChatViewModel @Inject constructor(
 
             when (val result = sendMessageUseCase.sendStructured(sessionId, content, locationId)) {
                 is Resource.Success -> {
-                    handleAiResponse(result.data)
+                    val response = result.data
+                    // 核心修复：将 AI 回复加入消息列表
+                    appendAssistantMessage(response)
+                    handleAiResponse(response)
                 }
                 is Resource.Error -> {
                     _uiState.value = ChatUiState.Error(result.message)
@@ -87,12 +97,22 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private fun appendAssistantMessage(response: AiResponse) {
+        val content = response.text ?: return
+        if (content.isBlank()) return
+        val newMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            role = ChatRole.ASSISTANT,
+            content = content,
+            locationId = null
+        )
+        _messages.value = _messages.value + newMessage
+    }
+
     private suspend fun handleAiResponse(response: AiResponse) {
         val action = response.action
         if (response.responseType == AiResponse.ResponseType.CHAT || action == null) {
-            response.text?.takeIf { it.isNotBlank() }?.let {
-                _events.emit(ChatUiEvent.ShowMessage(it))
-            }
+            // AI 回复文本已在 appendAssistantMessage 中加入列表，这里只处理特殊 Action
             return
         }
 

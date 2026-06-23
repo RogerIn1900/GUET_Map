@@ -41,7 +41,8 @@ sealed class MapUiState {
         val target: Location,
         val route: WalkRouteInfo? = null,
         val isLoading: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        val isInTrackingMode: Boolean = false
     ) : MapUiState()
 
     /** 错误状态 */

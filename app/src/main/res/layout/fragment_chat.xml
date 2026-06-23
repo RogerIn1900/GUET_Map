@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:padding="16dp">
 
-    <!-- 顶部工具栏 -->
+    <!-- 标题栏 -->
     <LinearLayout
         android:id="@+id/toolbar"
         android:layout_width="0dp"
@@ -17,11 +17,19 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonSettings"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="设置"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonFloatingBubble"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="悬浮球模式"
+            android:text="悬浮球"
             android:textSize="12sp" />
 
     </LinearLayout>

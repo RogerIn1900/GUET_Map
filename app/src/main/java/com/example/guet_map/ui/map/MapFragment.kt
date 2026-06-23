@@ -76,6 +76,9 @@ class MapFragment : Fragment() {
     private var hasAutoCenteredOnLocation = false
     private var routePolyline: com.amap.api.maps.model.Polyline? = null
 
+    private var navigationTracker: NavigationTracker? = null
+    private var isInTrackingMode = false
+
     private lateinit var filterAdapter: FilterTagAdapter
     private lateinit var searchBarComponent: SearchBarComponent
     private lateinit var navigationPanelComponent: NavigationPanelComponent
@@ -181,7 +184,10 @@ class MapFragment : Fragment() {
             context = requireContext(),
             parent = binding.mapContainer
         ).apply {
-            onCloseNavigation = { viewModel.clearWalkRoute() }
+            onCloseNavigation = {
+                stopNavigationTracking()
+                viewModel.clearWalkRoute()
+            }
             onStartNavigation = { location -> openExternalNavigation(location) }
         }
 
@@ -352,8 +358,15 @@ class MapFragment : Fragment() {
                 if (state.isLoading) {
                     navigationPanelComponent.showLoading()
                 } else {
-                    state.route?.let {
-                        navigationPanelComponent.show(state.target, it)
+                    state.route?.let { route ->
+                        navigationPanelComponent.show(state.target, route)
+                        // 路线规划成功，启动实时循迹
+                        if (latestGcjLatLng != null && !isInTrackingMode) {
+                            startNavigationTracking(route)
+                        }
+                    }
+                    state.errorMessage?.let {
+                        Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -507,16 +520,20 @@ class MapFragment : Fragment() {
         aMapLocationClient = AMapLocationClient(requireContext())
         aMapLocationClient?.onLocationResult = { amapLocation ->
             LocationCallbackHelper.onLocationResult?.invoke(amapLocation)
+            onAmapLocationReceived(amapLocation)
+            // 如果在循迹模式，将 GPS 更新喂给 tracker
+            if (isInTrackingMode) {
+                navigationTracker?.let { tracker ->
+                    val stdLocation = LocationCallbackHelper.toStandardLocation(amapLocation)
+                    tracker.onGpsUpdate(aMap!!, stdLocation, amapLocation)
+                }
+            }
         }
         aMapLocationClient?.start()
     }
 
     private fun onAmapLocationReceived(amapLocation: com.amap.api.location.AMapLocation) {
-        val location = android.location.Location("").apply {
-            latitude = amapLocation.latitude
-            longitude = amapLocation.longitude
-            accuracy = amapLocation.accuracy
-        }
+        val location = LocationCallbackHelper.toStandardLocation(amapLocation)
         onLocationReceived(location, amapLocation)
     }
 
@@ -574,6 +591,64 @@ class MapFragment : Fragment() {
             Toast.makeText(requireContext(), R.string.route_no_location, Toast.LENGTH_SHORT).show()
         }
         viewModel.planWalkRouteTo(location, start)
+    }
+
+    /**
+     * 在路线规划成功（显示到地图后）调用，启动实时循迹
+     */
+    private fun startNavigationTracking(route: com.example.guet_map.model.WalkRouteInfo) {
+        val map = aMap ?: return
+        val startPos = latestGcjLatLng ?: return
+
+        if (navigationTracker == null) {
+            navigationTracker = NavigationTracker(requireContext())
+        }
+
+        isInTrackingMode = true
+
+        // 启动循迹
+        navigationTracker?.startTracking(map, route, startPos)
+
+        // 观察 tracker 数据，更新面板
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    navigationTracker?.remainingDistance?.collect { dist ->
+                        val time = navigationTracker?.remainingTime?.value ?: 0
+                        val step = buildStepHint(dist, navigationTracker?.currentStepIndex?.value ?: 0)
+                        navigationPanelComponent.updateTrackingProgress(dist, time, step)
+                    }
+                }
+                launch {
+                    navigationTracker?.arrivalEvent?.collect {
+                        navigationPanelComponent.showArrival()
+                        Toast.makeText(requireContext(), "已到达目的地", Toast.LENGTH_SHORT).show()
+                        stopNavigationTracking()
+                    }
+                }
+                launch {
+                    navigationTracker?.deviationEvent?.collect { event ->
+                        navigationPanelComponent.showDeviationAlert()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopNavigationTracking() {
+        val map = aMap ?: return
+        isInTrackingMode = false
+        navigationTracker?.stopTracking(map)
+    }
+
+    private fun buildStepHint(remainingDist: Int, stepIndex: Int): String {
+        return when {
+            remainingDist <= 15 -> "已到达目的地"
+            remainingDist <= 50 -> "前方 $remainingDist 米，右转"
+            remainingDist <= 100 -> "前方 $remainingDist 米，直行"
+            remainingDist <= 300 -> "继续直行，约 ${(remainingDist / 60).coerceAtLeast(1)} 分钟"
+            else -> "剩余 ${remainingDist}米"
+        }
     }
 
     private fun openExternalNavigation(location: Location) {
@@ -647,6 +722,8 @@ class MapFragment : Fragment() {
 
     private fun showWalkRouteOnMap(route: com.example.guet_map.model.WalkRouteInfo) {
         val map = aMap ?: return
+        // 循迹模式下不画静态路线，由 NavigationTracker 负责绘制进度线
+        if (isInTrackingMode) return
         clearWalkRouteFromMap()
 
         routePolyline = map.addPolyline(
